@@ -110,4 +110,654 @@
           </h2>
 
           <p class="muted-text">
-           
+            Choose a chest to begin tracking.
+          </p>
+
+        </div>
+
+
+        <!-- CHEST CHOICES -->
+
+        <div class="chest-grid">
+
+          <button
+            type="button"
+            class="chest-card gold-card"
+            data-open-chest="gold"
+          >
+
+            <span class="chest-symbol">
+              ◆
+            </span>
+
+            <span class="chest-card-text">
+
+              <strong>
+                Gold
+              </strong>
+
+              <small>
+                Track &amp; Predict
+              </small>
+
+            </span>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="chest-card platinum-card"
+            data-open-chest="platinum"
+          >
+
+            <span class="chest-symbol">
+              ✦
+            </span>
+
+            <span class="chest-card-text">
+
+              <strong>
+                Platinum
+              </strong>
+
+              <small>
+                Track &amp; Predict
+              </small>
+
+            </span>
+
+          </button>
+
+        </div>
+
+
+        <!-- ACTIVE SESSION CARD -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                ACTIVE SESSION
+              </p>
+
+              <h3 id="activeSessionTitle">
+                No active session
+              </h3>
+
+            </div>
+
+            <button
+              id="resumeSessionButton"
+              type="button"
+              class="button secondary-button hidden"
+            >
+              Resume
+            </button>
+
+          </div>
+
+          <p id="activeSessionText" class="muted-text">
+            Start Gold or Platinum tracking to build a visible sequence.
+          </p>
+
+        </section>
+
+      </section>
+
+
+      <!-- ======================================
+           TRACKER VIEW
+      ======================================= -->
+
+      <section id="trackerView" class="view">
+
+        <!-- TRACKER HEADER -->
+
+        <div class="tracker-header glass-panel content-panel">
+
+          <button
+            id="backHomeButton"
+            type="button"
+            class="icon-button"
+            aria-label="Return to home"
+          >
+            ←
+          </button>
+
+          <div class="tracker-title">
+
+            <p id="trackerChestLabel" class="eyebrow">
+              GOLD CHEST
+            </p>
+
+            <h2>
+              Live Sequence
+            </h2>
+
+          </div>
+
+          <button
+            id="finishSessionButton"
+            type="button"
+            class="button danger-button"
+          >
+            Finish
+          </button>
+
+        </div>
+
+
+        <!-- CURRENT SEQUENCE -->
+
+        <section class="glass-panel content-panel sticky-sequence">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                CURRENT SEQUENCE
+              </p>
+
+              <h3>
+                <span id="sequenceCount">0</span>
+                drops recorded
+              </h3>
+
+            </div>
+
+            <button
+              id="undoDropButton"
+              type="button"
+              class="button secondary-button"
+              disabled
+            >
+              Undo
+            </button>
+
+          </div>
+
+          <div id="sequenceStrip" class="sequence-strip">
+
+            <p class="muted-text empty-message">
+              Your recorded drops will appear here instantly.
+            </p>
+
+          </div>
+
+        </section>
+
+
+        <!-- PREDICTION STATUS -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                ENGINE STATUS
+              </p>
+
+              <h3 id="predictionTitle">
+                Not enough data
+              </h3>
+
+            </div>
+
+            <div id="confidenceRing" class="confidence-ring">
+
+              <span id="confidenceValue">
+                0%
+              </span>
+
+            </div>
+
+          </div>
+
+          <p id="predictionText" class="muted-text">
+            Add drops to begin building your current sequence.
+          </p>
+
+        </section>
+
+
+        <!-- LOG DROP -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                LOG A DROP
+              </p>
+
+              <h3>
+                Tap the reward received
+              </h3>
+
+            </div>
+
+          </div>
+
+          <input
+            id="dropSearchInput"
+            class="search-input"
+            type="search"
+            placeholder="Search rewards"
+            autocomplete="off"
+          >
+
+          <div id="dropButtons" class="drop-grid"></div>
+
+        </section>
+
+
+        <!-- DROP PRIORITIES -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                DROP PRIORITIES
+              </p>
+
+              <h3>
+                Personalise your strategy
+              </h3>
+
+            </div>
+
+            <button
+              id="savePrioritiesButton"
+              type="button"
+              class="button primary-button"
+            >
+              Save
+            </button>
+
+          </div>
+
+          <p class="muted-text">
+            Set each reward from 0 to 100. Selecting Avoid gives that reward negative weight.
+          </p>
+
+
+          <!-- RARITY BONUSES -->
+
+          <div class="rarity-bonuses">
+
+            <span class="rarity-label epic-text">
+              Epic +0
+            </span>
+
+            <span class="rarity-label legendary-text">
+              Legendary +20
+            </span>
+
+            <span class="rarity-label mythic-text">
+              Mythic +30
+            </span>
+
+          </div>
+
+
+          <!-- Generated by app.js -->
+
+          <div id="priorityGroups"></div>
+
+        </section>
+
+
+        <!-- FULL SEQUENCE TABLE -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                FULL TABLE
+              </p>
+
+              <h3>
+                Sequence reference
+              </h3>
+
+            </div>
+
+            <button
+              id="toggleFullTableButton"
+              type="button"
+              class="button secondary-button"
+            >
+              Show
+            </button>
+
+          </div>
+
+          <div id="fullTableWrapper" class="hidden">
+
+            <div id="fullSequenceTable" class="full-sequence-table"></div>
+
+          </div>
+
+        </section>
+
+
+        <!-- STRATEGY BREAKDOWN -->
+
+        <section class="glass-panel content-panel">
+
+          <div class="section-heading">
+
+            <div>
+
+              <p class="eyebrow">
+                STRATEGY &amp; BREAKDOWN
+              </p>
+
+              <h3>
+                Opening plan
+              </h3>
+
+            </div>
+
+          </div>
+
+          <div
+            id="strategyBreakdown"
+            class="strategy-breakdown muted-text"
+          >
+            Add drops and set priorities to generate a personalised strategy.
+          </div>
+
+        </section>
+
+      </section>
+
+
+      <!-- ======================================
+           HISTORY VIEW
+      ======================================= -->
+
+      <section id="historyView" class="view">
+
+        <section class="glass-panel content-panel">
+
+          <p class="eyebrow">
+            CLOUD &amp; DEVICE HISTORY
+          </p>
+
+          <h2>
+            Recent Sessions
+          </h2>
+
+          <div id="historyList" class="history-list">
+
+            <p class="muted-text">
+              No completed sessions yet.
+            </p>
+
+          </div>
+
+        </section>
+
+      </section>
+
+
+      <!-- ======================================
+           PROFILE VIEW
+      ======================================= -->
+
+      <section id="profileView" class="view">
+
+        <section class="glass-panel content-panel profile-form">
+
+          <p class="eyebrow">
+            PLAYER PROFILE
+          </p>
+
+          <h2>
+            Your Details
+          </h2>
+
+
+          <label for="nicknameInput">
+            Nickname
+          </label>
+
+          <input
+            id="nicknameInput"
+            type="text"
+            maxlength="30"
+            placeholder="Tester"
+          >
+
+
+          <label for="allianceInput">
+            Alliance
+          </label>
+
+          <input
+            id="allianceInput"
+            type="text"
+            maxlength="50"
+            placeholder="Alliance name"
+          >
+
+
+          <label for="favouriteChestInput">
+            Favourite Chest
+          </label>
+
+          <select id="favouriteChestInput">
+
+            <option value="">
+              No preference
+            </option>
+
+            <option value="gold">
+              Gold
+            </option>
+
+            <option value="platinum">
+              Platinum
+            </option>
+
+          </select>
+
+
+          <button
+            id="saveProfileButton"
+            type="button"
+            class="button primary-button full-width-button"
+          >
+            Save Profile
+          </button>
+
+          <p id="profileMessage" class="muted-text"></p>
+
+        </section>
+
+      </section>
+
+
+      <!-- ======================================
+           SETTINGS VIEW
+      ======================================= -->
+
+      <section id="settingsView" class="view">
+
+        <section class="glass-panel content-panel">
+
+          <p class="eyebrow">
+            ABOUT
+          </p>
+
+          <h2>
+            Chest Companion v2 Alpha
+          </h2>
+
+          <p>
+            Built by <strong>Cherubim</strong>
+          </p>
+
+          <p>
+            Artwork by <strong>Eff</strong>
+          </p>
+
+          <p>
+            Powered by <strong>Supabase</strong>
+          </p>
+
+          <hr>
+
+          <p class="muted-text">
+            Created for Gold and Platinum chest tracking.
+            Silver, Bronze and Dragg are intentionally excluded
+            from this release.
+          </p>
+
+          <p class="footer-joke">
+            Approved by SeveredReality... eventually.
+          </p>
+
+        </section>
+
+
+        <section class="glass-panel content-panel">
+
+          <p class="eyebrow">
+            DEVICE DATA
+          </p>
+
+          <h3>
+            Reset Local App Data
+          </h3>
+
+          <p class="muted-text">
+            This clears sessions and preferences stored on this device.
+          </p>
+
+          <button
+            id="resetLocalDataButton"
+            type="button"
+            class="button danger-button full-width-button"
+          >
+            Reset Local Data
+          </button>
+
+        </section>
+
+      </section>
+
+    </main>
+
+
+    <!-- ========================================
+         BOTTOM NAVIGATION
+    ========================================= -->
+
+    <nav class="bottom-navigation glass-panel">
+
+      <button
+        type="button"
+        class="navigation-button active"
+        data-view="homeView"
+        data-title="Home"
+      >
+
+        <span class="navigation-icon">
+          ⌂
+        </span>
+
+        <span>
+          Home
+        </span>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="navigation-button"
+        data-view="historyView"
+        data-title="History"
+      >
+
+        <span class="navigation-icon">
+          ≡
+        </span>
+
+        <span>
+          History
+        </span>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="navigation-button"
+        data-view="profileView"
+        data-title="Profile"
+      >
+
+        <span class="navigation-icon">
+          ♙
+        </span>
+
+        <span>
+          Profile
+        </span>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="navigation-button"
+        data-view="settingsView"
+        data-title="Settings"
+      >
+
+        <span class="navigation-icon">
+          ⚙
+        </span>
+
+        <span>
+          Settings
+        </span>
+
+      </button>
+
+    </nav>
+
+  </div>
+
+
+  <!-- ==========================================
+       JAVASCRIPT FILES
+  =========================================== -->
+
+  <script src="data/gold.js"></script>
+  <script src="data/platinum.js"></script>
+
+  <script src="supabase.js"></script>
+  <script src="database.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>

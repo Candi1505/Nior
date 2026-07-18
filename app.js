@@ -2739,3 +2739,361 @@
     `;
 
   }
+  
+    /* =======================================================
+     FULL SEQUENCE TABLE
+  ======================================================= */
+
+  function renderFullSequenceTable() {
+
+    const tableContainer =
+      getElement("fullSequenceTable");
+
+    if (!tableContainer) return;
+
+    const sequence =
+      getSequence();
+
+    if (!sequence.length) {
+
+      tableContainer.innerHTML = `
+        <p class="muted-text">
+          Full sequence data has not been loaded yet.
+        </p>
+      `;
+
+      return;
+
+    }
+
+    tableContainer.innerHTML = sequence
+      .map((reward, index) => {
+
+        const item =
+          resolveSequenceReward(reward);
+
+        return `
+          <div class="sequence-row">
+
+            <span class="sequence-index">
+              ${index + 1}
+            </span>
+
+            <strong class="${item.rarity}-text">
+              ${item.name}
+            </strong>
+
+            <span>
+              ${item.quantity}
+            </span>
+
+          </div>
+        `;
+
+      })
+      .join("");
+
+  }
+
+
+  /* =======================================================
+     HISTORY
+  ======================================================= */
+
+  function renderHistory() {
+
+    const historyContainer =
+      getElement("historyList");
+
+    if (!historyContainer) return;
+
+    const history =
+      appState.history || [];
+
+    if (!history.length) {
+
+      historyContainer.innerHTML = `
+        <p class="muted-text">
+          No completed sessions yet.
+        </p>
+      `;
+
+      return;
+
+    }
+
+    historyContainer.innerHTML = history.map(session => `
+
+      <div class="history-card">
+
+        <h3>
+
+          ${capitalise(session.chest)} Chest
+
+        </h3>
+
+        <small>
+
+          ${formatDate(session.finishedAt)}
+
+        </small>
+
+        <p>
+
+          ${session.drops.length} drops recorded
+
+        </p>
+
+      </div>
+
+    `).join("");
+
+  }
+
+
+  function finishSession() {
+
+    if (!appState.activeSession) {
+
+      return;
+
+    }
+
+    appState.activeSession.finishedAt =
+      new Date().toISOString();
+
+    appState.history.unshift(
+      appState.activeSession
+    );
+
+    appState.activeSession =
+      null;
+
+    saveLocalState();
+
+    renderHomeScreen();
+
+    renderHistory();
+
+    showView(
+      "historyView",
+      "History"
+    );
+
+  }
+
+
+  /* =======================================================
+     RESET
+  ======================================================= */
+
+  function resetApplication() {
+
+    if (
+      !confirm(
+        "Reset all saved Chest Companion data?"
+      )
+    ) {
+
+      return;
+
+    }
+
+    localStorage.removeItem(
+      STORAGE_KEY
+    );
+
+    location.reload();
+
+  }
+
+
+  /* =======================================================
+     EVENT LISTENERS
+  ======================================================= */
+
+  function bindEvents() {
+
+    if (eventsBound) {
+
+      return;
+
+    }
+
+    eventsBound = true;
+
+
+    getAllElements(
+      ".navigation-button"
+    ).forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          showView(
+            button.dataset.view,
+            button.dataset.title
+          );
+
+        }
+      );
+
+    });
+
+
+    getElement(
+      "resumeSessionButton"
+    )?.addEventListener(
+      "click",
+      resumeActiveSession
+    );
+
+
+    getElement(
+      "saveProfileButton"
+    )?.addEventListener(
+      "click",
+      saveProfile
+    );
+
+
+    getElement(
+      "undoDropButton"
+    )?.addEventListener(
+      "click",
+      undoLastDrop
+    );
+
+
+    getElement(
+      "finishSessionButton"
+    )?.addEventListener(
+      "click",
+      finishSession
+    );
+
+
+    getElement(
+      "savePrioritiesButton"
+    )?.addEventListener(
+      "click",
+      savePriorities
+    );
+
+
+    getElement(
+      "resetLocalDataButton"
+    )?.addEventListener(
+      "click",
+      resetApplication
+    );
+
+
+    getElement(
+      "dropSearchInput"
+    )?.addEventListener(
+      "input",
+      event => {
+
+        renderDropButtons(
+          event.target.value
+        );
+
+      }
+    );
+
+
+    getElement(
+      "dropButtons"
+    )?.addEventListener(
+      "click",
+      event => {
+
+        const button =
+          event.target.closest(
+            "[data-drop-id]"
+          );
+
+        if (!button) return;
+
+        addDropToSession(
+          button.dataset.dropId
+        );
+
+      }
+    );
+
+
+    getAllElements(
+      "[data-open-chest]"
+    ).forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          openChestTracker(
+            button.dataset.openChest
+          );
+
+        }
+      );
+
+    });
+
+  }
+
+
+  /* =======================================================
+     STARTUP
+  ======================================================= */
+
+  window.addEventListener(
+    "error",
+    error => {
+
+      console.error(error);
+
+      openApplicationShell();
+
+    }
+  );
+
+
+  window.addEventListener(
+    "unhandledrejection",
+    error => {
+
+      console.error(error);
+
+      openApplicationShell();
+
+    }
+  );
+
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+
+      "DOMContentLoaded",
+
+      startApplication,
+
+      {
+        once: true
+      }
+
+    );
+
+  } else {
+
+    startApplication();
+
+  }
+
+})();

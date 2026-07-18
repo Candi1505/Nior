@@ -271,6 +271,31 @@ window.ChestDatabase = {
     return data;
 
   }
+  async getPredictor(chestType) {
+
+  const supabaseClient =
+    window.chestSupabase;
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from("predictors")
+      .select("*")
+      .eq("chest_type", chestType)
+      .eq("active", true)
+      .maybeSingle();
+
+  if (error) {
+
+    throw error;
+
+  }
+
+  return data;
+
+}
 
 };
 

@@ -590,7 +590,90 @@
 
       </section>
 
+<!-- ======================================
+     PREDICTOR VIEW
+====================================== -->
 
+<section id="predictorView" class="view">
+
+  <section class="glass-panel content-panel">
+
+    <p class="eyebrow">
+      PREDICTOR MANAGEMENT
+    </p>
+
+    <h2>
+      Upload Sequence Files
+    </h2>
+
+    <p class="muted-text">
+      Upload the latest Gold or Platinum sequence spreadsheet.
+      The predictor will validate the file before activating it.
+    </p>
+
+  </section>
+
+
+  <!-- GOLD -->
+
+  <section class="glass-panel content-panel">
+
+    <h3>Gold Predictor</h3>
+
+    <input
+      id="goldPredictorFile"
+      type="file"
+      accept=".csv,.xlsx"
+    >
+
+    <button
+      id="uploadGoldPredictorButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Upload Gold Sequence
+    </button>
+
+    <p
+      id="goldPredictorStatus"
+      class="muted-text"
+    >
+      No upload yet.
+    </p>
+
+  </section>
+
+
+  <!-- PLATINUM -->
+
+  <section class="glass-panel content-panel">
+
+    <h3>Platinum Predictor</h3>
+
+    <input
+      id="platinumPredictorFile"
+      type="file"
+      accept=".csv,.xlsx"
+    >
+
+    <button
+      id="uploadPlatinumPredictorButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Upload Platinum Sequence
+    </button>
+
+    <p
+      id="platinumPredictorStatus"
+      class="muted-text"
+    >
+      No upload yet.
+    </p>
+
+  </section>
+
+</section>
       <!-- ======================================
            SETTINGS VIEW
       ======================================= -->
@@ -719,6 +802,23 @@
         <span>
           Profile
         </span>
+
+      </button>
+      
+      <button
+         type="button"
+         class="navigation-button"
+         data-view="predictorView"
+         data-title="Predictors"
+>
+
+         <span class="navigation-icon">
+    ✦
+        </span>
+
+       <span>
+         Predictors
+      </span>
 
       </button>
 

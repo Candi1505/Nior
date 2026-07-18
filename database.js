@@ -296,6 +296,132 @@ window.ChestDatabase = {
   return data;
 
 }
+async savePredictor({
+  chestType,
+  version,
+  predictorData,
+  uploadedBy = null
+}) {
+  const supabaseClient = window.chestSupabase;
+
+  if (!supabaseClient) {
+    throw new Error(
+      "Supabase is not connected."
+    );
+  }
+
+  const normalisedChestType = String(
+    chestType || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    !["gold", "platinum", "draconic"].includes(
+      normalisedChestType
+    )
+  ) {
+    throw new Error(
+      "Unsupported chest type."
+    );
+  }
+
+  if (
+    !predictorData ||
+    typeof predictorData !== "object"
+  ) {
+    throw new Error(
+      "Predictor data is missing or invalid."
+    );
+  }
+
+  /*
+   * First deactivate the currently active
+   * predictor for this chest type.
+   */
+  const {
+    error: deactivateError
+  } = await supabaseClient
+    .from("predictors")
+    .update({
+      active: false
+    })
+    .eq(
+      "chest_type",
+      normalisedChestType
+    )
+    .eq("active", true);
+
+  if (deactivateError) {
+    throw deactivateError;
+  }
+
+  /*
+   * Then upload the replacement and mark
+   * it as the active predictor.
+   */
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("predictors")
+    .insert({
+      chest_type: normalisedChestType,
+      version:
+        version ||
+        new Date().toISOString(),
+      predictor_data: predictorData,
+      active: true,
+      uploaded_by: uploadedBy
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+},
+
+async getActivePredictors() {
+  const supabaseClient =
+    window.chestSupabase;
+
+  if (!supabaseClient) {
+    throw new Error(
+      "Supabase is not connected."
+    );
+  }
+
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("predictors")
+    .select(
+      [
+        "id",
+        "chest_type",
+        "version",
+        "predictor_data",
+        "uploaded_at"
+      ].join(",")
+    )
+    .eq("active", true)
+    .order(
+      "uploaded_at",
+      {
+        ascending: false
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+},
 
 };
 

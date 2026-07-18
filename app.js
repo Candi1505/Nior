@@ -1,6 +1,6 @@
 /* =========================================================
    CHEST COMPANION V2
-   Main Application — Part 1
+   Complete Main Application
 
    Built by Cherubim
    Artwork by Eff
@@ -12,32 +12,247 @@
 
 
   /* =======================================================
-     LOCAL STORAGE
+     APP SETTINGS
   ======================================================= */
 
   const STORAGE_KEY =
     "chest_companion_v2";
 
 
-  const defaultState = {
+  const CLOUD_TIMEOUT_MS =
+    7000;
+
+
+  const DEFAULT_STATE = {
 
     profile: {
-      nickname: "Tester",
-      alliance_name: "",
-      favourite_chest: ""
+
+      nickname:
+        "Tester",
+
+      alliance_name:
+        "",
+
+      favourite_chest:
+        ""
+
     },
 
-    activeSession: null,
+    activeSession:
+      null,
 
-    history: [],
+    history:
+      [],
 
     priorities: {
-      gold: {},
-      platinum: {}
+
+      gold:
+        {},
+
+      platinum:
+        {}
+
     }
 
   };
 
+
+  /*
+    These temporary rewards allow the app to open and function
+    even before the complete Gold and Platinum tables are loaded.
+  */
+
+  const FALLBACK_DATA = {
+
+    gold: {
+
+      rewards: [
+
+        {
+
+          id:
+            "gold-crystals",
+
+          name:
+            "Crystals",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        },
+
+        {
+
+          id:
+            "gold-breeding-tokens",
+
+          name:
+            "Breeding Tokens",
+
+          quantity:
+            "",
+
+          rarity:
+            "legendary"
+
+        },
+
+        {
+
+          id:
+            "gold-elemental-shards",
+
+          name:
+            "Elemental Shards",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        },
+
+        {
+
+          id:
+            "gold-food",
+
+          name:
+            "Food",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        },
+
+        {
+
+          id:
+            "gold-lumber",
+
+          name:
+            "Lumber",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        }
+
+      ],
+
+      sequence:
+        []
+
+    },
+
+
+    platinum: {
+
+      rewards: [
+
+        {
+
+          id:
+            "platinum-crystals",
+
+          name:
+            "Crystals",
+
+          quantity:
+            "",
+
+          rarity:
+            "legendary"
+
+        },
+
+        {
+
+          id:
+            "platinum-breeding-tokens",
+
+          name:
+            "Breeding Tokens",
+
+          quantity:
+            "",
+
+          rarity:
+            "mythic"
+
+        },
+
+        {
+
+          id:
+            "platinum-elemental-shards",
+
+          name:
+            "Elemental Shards",
+
+          quantity:
+            "",
+
+          rarity:
+            "legendary"
+
+        },
+
+        {
+
+          id:
+            "platinum-food",
+
+          name:
+            "Food",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        },
+
+        {
+
+          id:
+            "platinum-lumber",
+
+          name:
+            "Lumber",
+
+          quantity:
+            "",
+
+          rarity:
+            "epic"
+
+        }
+
+      ],
+
+      sequence:
+        []
+
+    }
+
+  };
+
+
+  /* =======================================================
+     APP STATE
+  ======================================================= */
 
   let appState =
     loadLocalState();
@@ -48,11 +263,16 @@
 
 
   let currentChest =
+    appState.activeSession?.chest ||
     "gold";
 
 
+  let eventsBound =
+    false;
+
+
   /* =======================================================
-     ELEMENT HELPERS
+     DOM HELPERS
   ======================================================= */
 
   const getElement =
@@ -60,918 +280,31 @@
       document.getElementById(id);
 
 
-  const allViews =
-    Array.from(
-      document.querySelectorAll(".view")
-    );
-
-
-  const navigationButtons =
-    Array.from(
-      document.querySelectorAll(
-        ".navigation-button"
-      )
-    );
-
-
-  /* =======================================================
-     LOCAL DATA
-  ======================================================= */
-
-  function loadLocalState() {
-
-    try {
-
-      const savedState =
-        JSON.parse(
-          localStorage.getItem(
-            STORAGE_KEY
-          ) || "{}"
-        );
-
-
-      return {
-
-        ...structuredClone(
-          defaultState
-        ),
-
-        ...savedState,
-
-        profile: {
-
-          ...defaultState.profile,
-
-          ...(savedState.profile || {})
-
-        },
-
-        priorities: {
-
-          gold:
-            savedState.priorities?.gold ||
-            {},
-
-          platinum:
-            savedState.priorities
-              ?.platinum ||
-            {}
-
-        }
-
-      };
-
-    } catch (error) {
-
-      console.error(
-        "Could not load local state:",
-        error
-      );
-
-
-      return structuredClone(
-        defaultState
-      );
-
-    }
-
-  }
-
-
-  function saveLocalState() {
-
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(appState)
-    );
-
-  }
-
-
-  /* =======================================================
-     APP STARTUP
-  ======================================================= */
-
-  async function startApplication() {
-
-    updateCloudBadge(
-      "Connecting...",
-      false
-    );
-
-
-    getElement(
-      "loadingStatus"
-    ).textContent =
-      "Connecting to the Crystal Nexus...";
-
-
-    try {
-
-      const player =
-        await window
-          .ChestDatabase
-          .initialisePlayer();
-
-
-      currentUser =
-        player.user;
-
-
-      appState.profile = {
-
-        ...appState.profile,
-
-        nickname:
-          player.profile.nickname ||
-          "Tester",
-
-        alliance_name:
-          player.profile
-            .alliance_name ||
-          "",
-
-        favourite_chest:
-          player.profile
-            .favourite_chest ||
-          ""
-
-      };
-
-
-      saveLocalState();
-
-
-      updateCloudBadge(
-        "Cloud connected",
-        true
-      );
-
-
-      getElement(
-        "loadingStatus"
-      ).textContent =
-        "✓ Connected";
-
-
-    } catch (error) {
-
-      console.error(
-        "Cloud connection failed:",
-        error
-      );
-
-
-      updateCloudBadge(
-        "Device mode",
-        false
-      );
-
-
-      getElement(
-        "loadingStatus"
-      ).textContent =
-        "Cloud unavailable — opening device mode";
-
-    }
-
-
-    loadProfileIntoScreen();
-
-    renderHomeScreen();
-
-
-    window.setTimeout(
-      () => {
-
-        getElement(
-          "loadingScreen"
-        ).classList.add(
-          "hidden"
-        );
-
-
-        getElement(
-          "appShell"
-        ).classList.remove(
-          "hidden"
-        );
-
-      },
-      700
-    );
-
-  }
-
-
-  function updateCloudBadge(
-    message,
-    online
-  ) {
-
-    const cloudBadge =
-      getElement(
-        "cloudBadge"
-      );
-
-
-    cloudBadge.textContent =
-      message;
-
-
-    cloudBadge.classList.toggle(
-      "online",
-      online
-    );
-
-  }
-
-
-  /* =======================================================
-     SCREEN NAVIGATION
-  ======================================================= */
-
-  function showView(
-    viewId,
-    pageTitle
-  ) {
-
-    allViews.forEach(
-      (view) => {
-
-        view.classList.toggle(
-          "active",
-          view.id === viewId
-        );
-
-      }
-    );
-
-
-    navigationButtons.forEach(
-      (button) => {
-
-        button.classList.toggle(
-          "active",
-          button.dataset.view ===
-            viewId
-        );
-
-      }
-    );
-
-
-    getElement(
-      "pageTitle"
-    ).textContent =
-      pageTitle ||
-      "Chest Companion";
-
-
-    if (
-      viewId ===
-      "historyView"
-    ) {
-
-      renderHistory();
-
-    }
-
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth"
-    });
-
-  }
-
-
-  /* =======================================================
-     PROFILE DISPLAY
-  ======================================================= */
-
-  function loadProfileIntoScreen() {
-
-    const nickname =
-      appState.profile.nickname ||
-      "Tester";
-
-
-    getElement(
-      "welcomeName"
-    ).textContent =
-      nickname;
-
-
-    getElement(
-      "nicknameInput"
-    ).value =
-      nickname;
-
-
-    getElement(
-      "allianceInput"
-    ).value =
-      appState.profile
-        .alliance_name ||
-      "";
-
-
-    getElement(
-      "favouriteChestInput"
-    ).value =
-      appState.profile
-        .favourite_chest ||
-      "";
-
-  }
-
-
-  /* =======================================================
-     HOME SCREEN
-  ======================================================= */
-
-  function renderHomeScreen() {
-
-    const activeSession =
-      appState.activeSession;
-
-
-    const resumeButton =
-      getElement(
-        "resumeSessionButton"
-      );
-
-
-    if (!activeSession) {
-
-      getElement(
-        "activeSessionTitle"
-      ).textContent =
-        "No active session";
-
-
-      getElement(
-        "activeSessionText"
-      ).textContent =
-        "Start Gold or Platinum tracking to build a visible sequence.";
-
-
-      resumeButton.classList.add(
-        "hidden"
-      );
-
-
-      return;
-
-    }
-
-
-    getElement(
-      "activeSessionTitle"
-    ).textContent =
-      `${capitalise(
-        activeSession.chest
-      )} session`;
-
-
-    getElement(
-      "activeSessionText"
-    ).textContent =
-      `${activeSession.drops.length} drops recorded. Your sequence is ready to resume.`;
-
-
-    resumeButton.classList.remove(
-      "hidden"
-    );
-
-  }
-
-
-  /* =======================================================
-     TRACKING SESSIONS
-  ======================================================= */
-
-  function openChestTracker(
-    chestType
-  ) {
-
-    currentChest =
-      chestType;
-
-
-    const existingSession =
-      appState.activeSession;
-
-
-    if (
-      !existingSession ||
-      existingSession.chest !==
-        chestType
-    ) {
-
-      appState.activeSession = {
-
-        id:
-          createUniqueId(),
-
-        chest:
-          chestType,
-
-        startedAt:
-          new Date()
-            .toISOString(),
-
-        drops: []
-
-      };
-
-
-      saveLocalState();
-
-    }
-
-
-    renderTracker();
-
-
-    showView(
-      "trackerView",
-      `${capitalise(
-        chestType
-      )} Tracker`
-    );
-
-  }
-
-
-  function resumeActiveSession() {
-
-    if (
-      !appState.activeSession
-    ) {
-
-      return;
-
-    }
-
-
-    currentChest =
-      appState
-        .activeSession
-        .chest;
-
-
-    renderTracker();
-
-
-    showView(
-      "trackerView",
-      `${capitalise(
-        currentChest
-      )} Tracker`
-    );
-
-  }
-
-
-  function renderTracker() {
-
-    const session =
-      appState.activeSession;
-
-
-    if (!session) {
-
-      return;
-
-    }
-
-
-    currentChest =
-      session.chest;
-
-
-    getElement(
-      "trackerChestLabel"
-    ).textContent =
-      `${currentChest.toUpperCase()} CHEST`;
-
-
-    renderDropButtons();
-
-    renderCurrentSequence();
-
-    updatePredictionDisplay();
-
-  }
-
-
-  /* =======================================================
-     REWARD DATA
-  ======================================================= */
-
-  function getCurrentChestData() {
-
-    return (
-      window.CHEST_DATA?.[
-        currentChest
-      ] || {
-        rewards: [],
-        sequence: []
-      }
-    );
-
-  }
-
-
-  function getCurrentRewards() {
-
-    return (
-      getCurrentChestData()
-        .rewards || []
-    );
-
-  }
-
-
-  /* =======================================================
-     DROP BUTTONS
-  ======================================================= */
-
-  function renderDropButtons(
-    searchText = ""
-  ) {
-
-    const search =
-      searchText
-        .trim()
-        .toLowerCase();
-
-
-    const rewards =
-      getCurrentRewards()
-        .filter(
-          (reward) => {
-
-            const searchableText =
-              `${reward.name} ${reward.quantity} ${reward.rarity}`
-                .toLowerCase();
-
-
-            return searchableText
-              .includes(search);
-
-          }
-        );
-
-
-    const dropContainer =
-      getElement(
-        "dropButtons"
-      );
-
-
-    if (!rewards.length) {
-
-      dropContainer.innerHTML = `
-
-        <p class="muted-text">
-          No rewards have been added for this chest yet.
-        </p>
-
-      `;
-
-
-      return;
-
-    }
-
-
-    dropContainer.innerHTML =
-      rewards
-        .map(
-          (reward) => `
-
-            <button
-              type="button"
-              class="drop-button"
-              data-drop-id="${escapeHtml(
-                reward.id
-              )}"
-            >
-
-              <strong class="${escapeHtml(
-                reward.rarity
-              )}-text">
-
-                ${escapeHtml(
-                  reward.name
-                )}
-
-              </strong>
-
-              <small>
-
-                ${escapeHtml(
-                  reward.quantity
-                )}
-
-                ·
-
-                ${capitalise(
-                  reward.rarity
-                )}
-
-              </small>
-
-            </button>
-
-          `
+  const getAllElements =
+    (selector) =>
+      Array.from(
+        document.querySelectorAll(
+          selector
         )
-        .join("");
-
-  }
+      );
 
 
-  function addDropToSequence(
-    rewardId
+  function setText(
+    element,
+    value
   ) {
 
-    const session =
-      appState.activeSession;
-
-
-    if (!session) {
+    if (!element) {
 
       return;
 
     }
 
 
-    const reward =
-      getCurrentRewards()
-        .find(
-          (item) =>
-            item.id === rewardId
-        );
-
-
-    if (!reward) {
-
-      console.error(
-        "Reward not found:",
-        rewardId
+    element.textContent =
+      String(
+        value ?? ""
       );
-
-
-      return;
-
-    }
-
-
-    session.drops.push({
-
-      ...reward,
-
-      loggedAt:
-        new Date()
-          .toISOString()
-
-    });
-
-
-    saveLocalState();
-
-
-    renderCurrentSequence();
-
-    updatePredictionDisplay();
-
-  }
-
-
-  function undoLastDrop() {
-
-    const drops =
-      appState
-        .activeSession
-        ?.drops;
-
-
-    if (
-      !drops ||
-      drops.length === 0
-    ) {
-
-      return;
-
-    }
-
-
-    drops.pop();
-
-
-    saveLocalState();
-
-
-    renderCurrentSequence();
-
-    updatePredictionDisplay();
-
-  }
-
-
-  /* =======================================================
-     VISIBLE CURRENT SEQUENCE
-  ======================================================= */
-
-  function renderCurrentSequence() {
-
-    const drops =
-      appState
-        .activeSession
-        ?.drops ||
-      [];
-
-
-    getElement(
-      "sequenceCount"
-    ).textContent =
-      drops.length;
-
-
-    getElement(
-      "undoDropButton"
-    ).disabled =
-      drops.length === 0;
-
-
-    const sequenceStrip =
-      getElement(
-        "sequenceStrip"
-      );
-
-
-    if (!drops.length) {
-
-      sequenceStrip.innerHTML = `
-
-        <p class="muted-text empty-message">
-          Your recorded drops will appear here instantly.
-        </p>
-
-      `;
-
-
-      return;
-
-    }
-
-
-    sequenceStrip.innerHTML =
-      drops
-        .map(
-          (
-            drop,
-            index
-          ) => `
-
-            <div class="sequence-item">
-
-              <small>
-                #${index + 1}
-              </small>
-
-              <strong class="${escapeHtml(
-                drop.rarity
-              )}-text">
-
-                ${escapeHtml(
-                  drop.name
-                )}
-
-              </strong>
-
-              <span>
-                ${escapeHtml(
-                  drop.quantity
-                )}
-              </span>
-
-            </div>
-
-          `
-        )
-        .join("");
-
-
-    sequenceStrip.scrollLeft =
-      sequenceStrip.scrollWidth;
-
-  }
-
-
-  /* =======================================================
-     PREDICTION STATUS
-  ======================================================= */
-
-  function updatePredictionDisplay() {
-
-    const drops =
-      appState
-        .activeSession
-        ?.drops ||
-      [];
-
-
-    /*
-      Temporary confidence display.
-
-      The exact sequence matcher will replace this after
-      the Gold and Platinum sequence tables are loaded.
-    */
-
-    const confidence =
-      Math.min(
-        95,
-        drops.length * 8
-      );
-
-
-    getElement(
-      "confidenceValue"
-    ).textContent =
-      `${confidence}%`;
-
-
-    getElement(
-      "confidenceRing"
-    ).style.background =
-      `conic-gradient(
-        var(--purple)
-        ${confidence * 3.6}deg,
-        rgba(255, 255, 255, 0.08)
-        0deg
-      )`;
-
-
-    if (!drops.length) {
-
-      getElement(
-        "predictionTitle"
-      ).textContent =
-        "Not enough data";
-
-
-      getElement(
-        "predictionText"
-      ).textContent =
-        "Add drops to begin building your current sequence.";
-
-
-      return;
-
-    }
-
-
-    const knownSequence =
-      getCurrentChestData()
-        .sequence ||
-      [];
-
-
-    if (!knownSequence.length) {
-
-      getElement(
-        "predictionTitle"
-      ).textContent =
-        "Sequence captured";
-
-
-      getElement(
-        "predictionText"
-      ).textContent =
-        `${drops.length} drops recorded. Exact matching will activate when the full ${capitalise(
-          currentChest
-        )} sequence table is loaded.`;
-
-
-      return;
-
-    }
-
-
-    getElement(
-      "predictionTitle"
-    ).textContent =
-      "Searching known patterns";
-
-
-    getElement(
-      "predictionText"
-    ).textContent =
-      "Comparing your recorded drops against the known chest sequence.";
 
   }
 
@@ -980,11 +313,30 @@
      GENERAL HELPERS
   ======================================================= */
 
+  function cloneValue(
+    value
+  ) {
+
+    return JSON.parse(
+      JSON.stringify(
+        value
+      )
+    );
+
+  }
+
+
   function capitalise(
     value
   ) {
 
-    if (!value) {
+    const text =
+      String(
+        value || ""
+      );
+
+
+    if (!text) {
 
       return "";
 
@@ -992,10 +344,40 @@
 
 
     return (
-      value
-        .charAt(0)
+      text.charAt(0)
         .toUpperCase() +
-      value.slice(1)
+      text.slice(1)
+    );
+
+  }
+
+
+  function escapeHtml(
+    value
+  ) {
+
+    return String(
+      value ?? ""
+    ).replace(
+      /[&<>"']/g,
+      (character) => ({
+
+        "&":
+          "&amp;",
+
+        "<":
+          "&lt;",
+
+        ">":
+          "&gt;",
+
+        "\"":
+          "&quot;",
+
+        "'":
+          "&#039;"
+
+      })[character]
     );
 
   }
@@ -1017,37 +399,776 @@
 
 
     return (
+
       Date.now()
         .toString(36) +
+
+      "-" +
+
       Math.random()
         .toString(36)
         .slice(2)
+
     );
 
   }
 
 
-  function escapeHtml(
+  function formatDate(
     value
   ) {
 
-    return String(
-      value ?? ""
-    ).replace(
-      /[&<>"']/g,
-      (character) => ({
+    try {
 
-        "&": "&amp;",
+      return new Intl
+        .DateTimeFormat(
+          "en-AU",
+          {
 
-        "<": "&lt;",
+            dateStyle:
+              "medium",
 
-        ">": "&gt;",
+            timeStyle:
+              "short"
 
-        "\"": "&quot;",
+          }
+        )
+        .format(
+          new Date(value)
+        );
 
-        "'": "&#039;"
+    } catch (error) {
 
-      })[character]
+      return String(
+        value || ""
+      );
+
+    }
+
+  }
+
+
+  function withTimeout(
+    promise,
+    milliseconds =
+      CLOUD_TIMEOUT_MS
+  ) {
+
+    return Promise.race([
+
+      promise,
+
+      new Promise(
+        (
+          resolve,
+          reject
+        ) => {
+
+          window.setTimeout(
+            () => {
+
+              reject(
+                new Error(
+                  "Cloud connection timed out."
+                )
+              );
+
+            },
+            milliseconds
+          );
+
+        }
+      )
+
+    ]);
+
+  }
+
+
+  /* =======================================================
+     LOCAL STORAGE
+  ======================================================= */
+
+  function loadLocalState() {
+
+    try {
+
+      const savedState =
+        JSON.parse(
+
+          localStorage.getItem(
+            STORAGE_KEY
+          ) ||
+
+          "{}"
+
+        );
+
+
+      return {
+
+        ...cloneValue(
+          DEFAULT_STATE
+        ),
+
+        ...savedState,
+
+        profile: {
+
+          ...DEFAULT_STATE.profile,
+
+          ...(
+            savedState.profile ||
+            {}
+          )
+
+        },
+
+        priorities: {
+
+          gold:
+            savedState
+              .priorities
+              ?.gold ||
+            {},
+
+          platinum:
+            savedState
+              .priorities
+              ?.platinum ||
+            {}
+
+        },
+
+        history:
+          Array.isArray(
+            savedState.history
+          )
+            ? savedState.history
+            : []
+
+      };
+
+    } catch (error) {
+
+      console.error(
+        "Chest Companion could not load local data:",
+        error
+      );
+
+
+      return cloneValue(
+        DEFAULT_STATE
+      );
+
+    }
+
+  }
+
+
+  function saveLocalState() {
+
+    try {
+
+      localStorage.setItem(
+
+        STORAGE_KEY,
+
+        JSON.stringify(
+          appState
+        )
+
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Chest Companion could not save local data:",
+        error
+      );
+
+    }
+
+  }
+
+
+  /* =======================================================
+     CHEST DATA HELPERS
+  ======================================================= */
+
+  function normaliseReward(
+    reward,
+    index = 0,
+    chestType =
+      currentChest
+  ) {
+
+    if (
+      typeof reward ===
+      "string"
+    ) {
+
+      return {
+
+        id:
+          reward,
+
+        name:
+          reward,
+
+        quantity:
+          "",
+
+        rarity:
+          "epic"
+
+      };
+
+    }
+
+
+    return {
+
+      id:
+        String(
+
+          reward?.id ||
+
+          reward?.key ||
+
+          reward?.slug ||
+
+          `${chestType}-reward-${index}`
+
+        ),
+
+      name:
+        String(
+
+          reward?.name ||
+
+          reward?.reward ||
+
+          reward?.label ||
+
+          "Unknown reward"
+
+        ),
+
+      quantity:
+        String(
+
+          reward?.quantity ??
+
+          reward?.amount ??
+
+          reward?.value ??
+
+          ""
+
+        ),
+
+      rarity:
+        String(
+
+          reward?.rarity ||
+
+          "epic"
+
+        )
+          .toLowerCase()
+
+    };
+
+  }
+
+
+  function getRawChestData(
+    chestType =
+      currentChest
+  ) {
+
+    if (
+      window.CHEST_DATA?.[
+        chestType
+      ]
+    ) {
+
+      return window
+        .CHEST_DATA[
+          chestType
+        ];
+
+    }
+
+
+    if (
+      chestType ===
+        "gold" &&
+      window.GOLD_CHEST_DATA
+    ) {
+
+      return window
+        .GOLD_CHEST_DATA;
+
+    }
+
+
+    if (
+      chestType ===
+        "platinum" &&
+      window.PLATINUM_CHEST_DATA
+    ) {
+
+      return window
+        .PLATINUM_CHEST_DATA;
+
+    }
+
+
+    return FALLBACK_DATA[
+      chestType
+    ];
+
+  }
+
+
+  function getRewards(
+    chestType =
+      currentChest
+  ) {
+
+    const chestData =
+      getRawChestData(
+        chestType
+      );
+
+
+    const rewardList =
+
+      chestData?.rewards ||
+
+      chestData?.drops ||
+
+      chestData?.items ||
+
+      [];
+
+
+    const normalisedRewards =
+      rewardList.map(
+        (
+          reward,
+          index
+        ) =>
+          normaliseReward(
+            reward,
+            index,
+            chestType
+          )
+      );
+
+
+    if (
+      normalisedRewards.length
+    ) {
+
+      return normalisedRewards;
+
+    }
+
+
+    return FALLBACK_DATA[
+      chestType
+    ].rewards.map(
+      (
+        reward,
+        index
+      ) =>
+        normaliseReward(
+          reward,
+          index,
+          chestType
+        )
     );
 
   }
+
+
+  function getSequence(
+    chestType =
+      currentChest
+  ) {
+
+    const chestData =
+      getRawChestData(
+        chestType
+      );
+
+
+    const sequenceList =
+
+      chestData?.sequence ||
+
+      chestData?.fullSequence ||
+
+      chestData?.table ||
+
+      [];
+
+
+    return sequenceList.map(
+      (
+        entry,
+        index
+      ) =>
+        normaliseReward(
+          entry,
+          index,
+          chestType
+        )
+    );
+
+  }
+
+
+  function rewardsMatch(
+    firstReward,
+    secondReward
+  ) {
+
+    if (
+      !firstReward ||
+      !secondReward
+    ) {
+
+      return false;
+
+    }
+
+
+    const firstId =
+      String(
+        firstReward.id ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const secondId =
+      String(
+        secondReward.id ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    if (
+      firstId &&
+      secondId &&
+      firstId === secondId
+    ) {
+
+      return true;
+
+    }
+
+
+    const firstName =
+      String(
+        firstReward.name ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const secondName =
+      String(
+        secondReward.name ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const firstQuantity =
+      String(
+        firstReward.quantity ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const secondQuantity =
+      String(
+        secondReward.quantity ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+
+    return (
+
+      firstName ===
+        secondName &&
+
+      (
+        !firstQuantity ||
+
+        !secondQuantity ||
+
+        firstQuantity ===
+          secondQuantity
+      )
+
+    );
+
+  }
+
+
+  function resolveSequenceReward(
+    sequenceEntry
+  ) {
+
+    return (
+
+      getRewards()
+        .find(
+          (reward) =>
+            rewardsMatch(
+              reward,
+              sequenceEntry
+            )
+        ) ||
+
+      sequenceEntry
+
+    );
+
+  }
+
+
+  /* =======================================================
+     LOADING AND CLOUD STATUS
+  ======================================================= */
+
+  function updateCloudBadge(
+    message,
+    online =
+      false
+  ) {
+
+    const cloudBadge =
+      getElement(
+        "cloudBadge"
+      );
+
+
+    if (!cloudBadge) {
+
+      return;
+
+    }
+
+
+    cloudBadge.textContent =
+      message;
+
+
+    cloudBadge.classList.toggle(
+      "online",
+      online
+    );
+
+  }
+
+
+  function openApplicationShell() {
+
+    getElement(
+      "loadingScreen"
+    )?.classList.add(
+      "hidden"
+    );
+
+
+    getElement(
+      "appShell"
+    )?.classList.remove(
+      "hidden"
+    );
+
+  }
+
+
+  async function startApplication() {
+
+    bindEvents();
+
+    loadProfileIntoScreen();
+
+    renderHomeScreen();
+
+
+    updateCloudBadge(
+      "Connecting...",
+      false
+    );
+
+
+    setText(
+
+      getElement(
+        "loadingStatus"
+      ),
+
+      "Connecting to the Crystal Nexus..."
+
+    );
+
+
+    try {
+
+      if (
+        !window
+          .ChestDatabase
+          ?.initialisePlayer
+      ) {
+
+        throw new Error(
+          "Database tools are unavailable."
+        );
+
+      }
+
+
+      const player =
+        await withTimeout(
+
+          window
+            .ChestDatabase
+            .initialisePlayer()
+
+        );
+
+
+      currentUser =
+        player?.user ||
+        null;
+
+
+      if (
+        player?.profile
+      ) {
+
+        appState.profile = {
+
+          nickname:
+
+            player
+              .profile
+              .nickname ||
+
+            appState
+              .profile
+              .nickname ||
+
+            "Tester",
+
+          alliance_name:
+
+            player
+              .profile
+              .alliance_name ||
+
+            appState
+              .profile
+              .alliance_name ||
+
+            "",
+
+          favourite_chest:
+
+            player
+              .profile
+              .favourite_chest ||
+
+            appState
+              .profile
+              .favourite_chest ||
+
+            ""
+
+        };
+
+
+        saveLocalState();
+
+      }
+
+
+      updateCloudBadge(
+        "Cloud connected",
+        true
+      );
+
+
+      setText(
+
+        getElement(
+          "loadingStatus"
+        ),
+
+        "✓ Connected"
+
+      );
+
+    } catch (error) {
+
+      console.warn(
+        "Chest Companion is opening in device mode:",
+        error
+      );
+
+
+      updateCloudBadge(
+        "Device mode",
+        false
+      );
+
+
+      setText(
+
+        getElement(
+          "loadingStatus"
+        ),
+
+        "Cloud unavailable — opening device mode"
+
+      );
+
+    } finally {
+
+      loadProfileIntoScreen();
+
+      renderHomeScreen();
+
+
+      window.setTimeout(
+        () => {
+
+          openApplicationShell();
+
+        },
+        500
+      );
+
+    }
+
+  }
+  

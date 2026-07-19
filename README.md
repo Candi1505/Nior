@@ -1,4 +1,4 @@
-# 🐉 Chest Companion – Eff Tester
+# 🐉 Chest Companion –Tester
 
 **Development & Testing Build**
 
@@ -62,7 +62,7 @@ The more information provided, the easier it is to reproduce and fix.
 
 ## ❤️ Thank You
 
-A huge thank you to **Eff** for helping test Chest Companion and providing valuable feedback throughout development.
+A huge thank you to beata Testers for helping test Chest Companion and providing valuable feedback throughout development.
 
 Community testing helps make the app more accurate and reliable for everyone.
 
@@ -78,4 +78,4 @@ All game trademarks remain the property of their respective owners.
 
 ---
 
-Built with ❤️ by **Cherubim**
+Built with ❤️ 

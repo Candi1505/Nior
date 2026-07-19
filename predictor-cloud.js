@@ -1,6 +1,6 @@
 /* ============================================================
    CHEST COMPANION V2 — CLOUD PREDICTOR LOADER
-   Built by Cherubim
+   
 
    Downloads active predictor databases from Supabase and
    exposes them through window.CHEST_DATA.

@@ -592,15 +592,78 @@
   }
 
 
-  /* =======================================================
-     CHEST DATA HELPERS
+  /*   /* =======================================================
+     UPLOADED PREDICTOR DATA HELPERS
   ======================================================= */
+
+  function getSelectedEventId() {
+
+    return (
+      window
+        .ChestPredictorUpload
+        ?.getSelectedEvent?.() ||
+      ""
+    );
+
+  }
+
+
+  function getSelectedEventName() {
+
+    const eventId =
+      getSelectedEventId();
+
+
+    return (
+      window
+        .ChestPredictorUpload
+        ?.getEventName?.(
+          eventId
+        ) ||
+      eventId ||
+      "No event selected"
+    );
+
+  }
+
+
+  function createRewardId(
+    chestType,
+    rewardName,
+    index = 0
+  ) {
+
+    const slug =
+      String(
+        rewardName || ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(/×/g, "x")
+        .replace(
+          /[^a-z0-9]+/g,
+          "-"
+        )
+        .replace(
+          /^-+|-+$/g,
+          ""
+        );
+
+
+    return (
+      `${chestType}-${slug || "reward"}-${index}`
+    );
+
+  }
+
 
   function normaliseReward(
     reward,
     index = 0,
     chestType =
-      currentChest
+      currentChest,
+    rarity =
+      ""
   ) {
 
     if (
@@ -611,7 +674,11 @@
       return {
 
         id:
-          reward,
+          createRewardId(
+            chestType,
+            reward,
+            index
+          ),
 
         name:
           reward,
@@ -620,11 +687,35 @@
           "",
 
         rarity:
-          "epic"
+          String(
+            rarity ||
+            "epic"
+          ).toLowerCase(),
+
+        display:
+          reward
 
       };
 
     }
+
+
+    const rewardName =
+      String(
+
+        reward?.name ||
+
+        reward?.reward ||
+
+        reward?.display ||
+
+        reward?.label ||
+
+        reward?.prize ||
+
+        "Unknown reward"
+
+      );
 
 
     return {
@@ -638,22 +729,16 @@
 
           reward?.slug ||
 
-          `${chestType}-reward-${index}`
+          createRewardId(
+            chestType,
+            rewardName,
+            index
+          )
 
         ),
 
       name:
-        String(
-
-          reward?.name ||
-
-          reward?.reward ||
-
-          reward?.label ||
-
-          "Unknown reward"
-
-        ),
+        rewardName,
 
       quantity:
         String(
@@ -673,62 +758,56 @@
 
           reward?.rarity ||
 
+          rarity ||
+
           "epic"
 
+        ).toLowerCase(),
+
+      display:
+        String(
+
+          reward?.display ||
+
+          rewardName
+
         )
-          .toLowerCase()
 
     };
 
   }
 
 
-  function getRawChestData(
+  function getPredictorProfile(
     chestType =
       currentChest
   ) {
 
+    const eventId =
+      getSelectedEventId();
+
+
     if (
-      window.CHEST_DATA?.[
-        chestType
-      ]
+      !eventId ||
+      !window
+        .ChestPredictorEngine
+        ?.getProfile
     ) {
 
-      return window
-        .CHEST_DATA[
-          chestType
-        ];
+      return null;
 
     }
 
 
-    if (
-      chestType ===
-        "gold" &&
-      window.GOLD_CHEST_DATA
-    ) {
-
-      return window
-        .GOLD_CHEST_DATA;
-
-    }
-
-
-    if (
-      chestType ===
-        "platinum" &&
-      window.PLATINUM_CHEST_DATA
-    ) {
-
-      return window
-        .PLATINUM_CHEST_DATA;
-
-    }
-
-
-    return FALLBACK_DATA[
-      chestType
-    ];
+    return (
+      window
+        .ChestPredictorEngine
+        .getProfile(
+          chestType,
+          eventId
+        ) ||
+      null
+    );
 
   }
 
@@ -738,42 +817,65 @@
       currentChest
   ) {
 
-    const chestData =
-      getRawChestData(
+    const eventId =
+      getSelectedEventId();
+
+
+    const engine =
+      window
+        .ChestPredictorEngine;
+
+
+    const profile =
+      getPredictorProfile(
         chestType
       );
 
 
-    const rewardList =
-
-      chestData?.rewards ||
-
-      chestData?.drops ||
-
-      chestData?.items ||
-
-      [];
-
-
-    const normalisedRewards =
-      rewardList.map(
-        (
-          reward,
-          index
-        ) =>
-          normaliseReward(
-            reward,
-            index,
-            chestType
-          )
-      );
-
-
     if (
-      normalisedRewards.length
+      engine &&
+      profile
     ) {
 
-      return normalisedRewards;
+      const rewardNames =
+        engine.getRewardCatalogue(
+          chestType,
+          eventId
+        );
+
+
+      const rewards =
+        rewardNames.map(
+          (
+            rewardName,
+            index
+          ) => {
+
+            const rarity =
+              engine.findRewardRarity(
+                profile,
+                rewardName
+              );
+
+
+            return normaliseReward(
+              rewardName,
+              index,
+              chestType,
+              rarity
+            );
+
+          }
+        );
+
+
+      if (
+        rewards.length
+      ) {
+
+        return rewards;
+
+      }
 
     }
 
@@ -800,33 +902,76 @@
       currentChest
   ) {
 
-    const chestData =
-      getRawChestData(
-        chestType
+    const eventId =
+      getSelectedEventId();
+
+
+    const engine =
+      window
+        .ChestPredictorEngine;
+
+
+    if (
+      !eventId ||
+      !engine
+        ?.buildSequenceTable
+    ) {
+
+      return [];
+
+    }
+
+
+    const rows =
+      engine.buildSequenceTable(
+        chestType,
+        eventId
       );
 
 
-    const sequenceList =
-
-      chestData?.sequence ||
-
-      chestData?.fullSequence ||
-
-      chestData?.table ||
-
-      [];
-
-
-    return sequenceList.map(
+    return rows.map(
       (
-        entry,
+        row,
         index
-      ) =>
-        normaliseReward(
-          entry,
-          index,
-          chestType
-        )
+      ) => ({
+
+        id:
+          createRewardId(
+            chestType,
+            row.reward,
+            index
+          ),
+
+        name:
+          String(
+            row.reward ||
+            "Unknown reward"
+          ),
+
+        display:
+          String(
+            row.reward ||
+            ""
+          ),
+
+        quantity:
+          "",
+
+        rarity:
+          String(
+            row.rarity ||
+            "epic"
+          ).toLowerCase(),
+
+        position:
+          row.position,
+
+        bonus:
+          Boolean(
+            row.bonus
+          )
+
+      })
     );
 
   }
@@ -847,85 +992,50 @@
     }
 
 
-    const firstId =
-      String(
-        firstReward.id ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    const secondId =
-      String(
-        secondReward.id ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    if (
-      firstId &&
-      secondId &&
-      firstId === secondId
-    ) {
-
-      return true;
-
-    }
+    const normaliseValue =
+      value =>
+        String(
+          value || ""
+        )
+          .trim()
+          .toLowerCase()
+          .replace(/×/g, "x")
+          .replace(
+            /[^a-z0-9+%]/g,
+            ""
+          );
 
 
     const firstName =
-      String(
-        firstReward.name ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
+      normaliseValue(
+
+        firstReward.display ||
+
+        firstReward.reward ||
+
+        firstReward.name
+
+      );
 
 
     const secondName =
-      String(
-        secondReward.name ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
+      normaliseValue(
 
+        secondReward.display ||
 
-    const firstQuantity =
-      String(
-        firstReward.quantity ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
+        secondReward.reward ||
 
+        secondReward.name
 
-    const secondQuantity =
-      String(
-        secondReward.quantity ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
+      );
 
 
     return (
-
+      Boolean(
+        firstName
+      ) &&
       firstName ===
-        secondName &&
-
-      (
-        !firstQuantity ||
-
-        !secondQuantity ||
-
-        firstQuantity ===
-          secondQuantity
-      )
-
+        secondName
     );
 
   }
@@ -935,23 +1045,34 @@
     sequenceEntry
   ) {
 
-    return (
+    if (
+      !sequenceEntry
+    ) {
 
+      return null;
+
+    }
+
+
+    return (
       getRewards()
         .find(
-          (reward) =>
+          reward =>
             rewardsMatch(
               reward,
               sequenceEntry
             )
         ) ||
 
-      sequenceEntry
-
+      normaliseReward(
+        sequenceEntry,
+        sequenceEntry.position || 0,
+        currentChest,
+        sequenceEntry.rarity
+      )
     );
 
   }
-
 
   /* =======================================================
      LOADING AND CLOUD STATUS

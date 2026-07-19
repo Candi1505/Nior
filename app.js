@@ -2,8 +2,7 @@
    CHEST COMPANION V2
    Complete Main Application
 
-   Built by Cherubim
-   Artwork by Eff
+   Built with ❤️ for the WD community 
 ========================================================= */
 
 (() => {

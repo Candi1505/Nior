@@ -1972,28 +1972,64 @@
         : "Show full sequence";
   }
 
-  function openPredictor(
+    async function openPredictor(
     chestType = null
   ) {
+
     if (
       chestType === "gold" ||
       chestType === "platinum"
     ) {
-      state.chestType = chestType;
-      state.selectedRarity = "";
-      saveState();
+
+      state.chestType =
+        chestType;
+
+      state.selectedRarity =
+        "";
+
     }
 
-    renderEverything();
 
-    document
-      .getElementById(
+    state.eventId =
+      getActiveEventId();
+
+
+    saveState();
+
+
+    const overlay =
+      document.getElementById(
         "ccPredictorOverlay"
-      )
-      .classList.add("cc-open");
+      );
+
+
+    overlay.classList.add(
+      "cc-open"
+    );
+
 
     document.body.style.overflow =
       "hidden";
+
+
+    if (!state.eventId) {
+
+      renderEverything();
+
+      document.getElementById(
+        "ccSolverMessage"
+      ).textContent =
+        "Select an event on the Predictors page first.";
+
+      return;
+
+    }
+
+
+    await activateCurrentPredictor();
+
+    renderEverything();
+
   }
 
   function closePredictor() {

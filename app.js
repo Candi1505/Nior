@@ -3070,7 +3070,7 @@
     if (!tableContainer) return;
 
     const sequence =
-      getSequence();
+  window.ChestPredictorEngine?.getRewardSequence?.() || [];
 
     if (!sequence.length) {
 

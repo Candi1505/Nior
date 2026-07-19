@@ -3438,3 +3438,25 @@
   }
 
 })();
+/* =========================================================
+   FULL SEQUENCE TABLE TOGGLE
+========================================================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+  const toggleButton = document.getElementById("toggleFullTableButton");
+  const tableWrapper = document.getElementById("fullTableWrapper");
+
+  if (!toggleButton || !tableWrapper) {
+    console.warn("Full table controls could not be found.");
+    return;
+  }
+
+  toggleButton.addEventListener("click", () => {
+    const isHidden = tableWrapper.classList.contains("hidden");
+
+    tableWrapper.classList.toggle("hidden");
+
+    toggleButton.textContent = isHidden ? "Hide" : "Show";
+    toggleButton.setAttribute("aria-expanded", String(isHidden));
+  });
+});

@@ -1253,7 +1253,7 @@
 
     const rarities = Engine.getRarities(
       state.chestType,
-      getActiveEventId(),
+      getActiveEventId()
     );
 
     if (!rarities.length) {
@@ -1337,13 +1337,13 @@
         .toLowerCase();
 
     const rewards =
-      Engine.getRewardCatalogue(
-        state.chestType,
-        state.profileName,
-        state.selectedRarity
-      ).filter(reward =>
-        reward.toLowerCase().includes(search)
-      );
+  Engine.getRewardCatalogue(
+    state.chestType,
+    getActiveEventId(),
+    state.selectedRarity
+  ).filter(reward =>
+    reward.toLowerCase().includes(search)
+  );
 
     if (!rewards.length) {
       container.innerHTML = `
@@ -1583,12 +1583,10 @@
       message.className = "cc-muted";
 
       message.textContent =
-        `${titleCase(
-          state.profileName
-        )} ${titleCase(
-          state.chestType
-        )} data is loaded. ` +
-        "Enter your first chest result.";
+  `${getActiveEventName()} ${titleCase(
+    state.chestType
+  )} data is loaded. ` +
+  "Enter your first chest result.";
 
       trackGrid.innerHTML = "";
 
@@ -1736,12 +1734,12 @@
       .join("");
 
     const predictions =
-      Engine.predictUpcoming(
-        state.chestType,
-        state.profileName,
-        drops,
-        5
-      );
+  Engine.predictUpcoming(
+    state.chestType,
+    getActiveEventId(),
+    drops,
+    5
+  );
 
     if (!predictions.length) {
       predictionList.innerHTML = `
@@ -1881,10 +1879,10 @@
       );
 
     const bonusRows =
-      Engine.buildBonusTable(
-        state.chestType,
-        state.profileName
-      );
+  Engine.buildBonusTable(
+    state.chestType,
+    getActiveEventId()
+  );
 
     if (!bonusRows.length) {
       bonusSection.classList.add(

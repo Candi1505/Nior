@@ -1734,6 +1734,10 @@
     chestType
   ) {
 
+    const eventId =
+      getSelectedEventId();
+
+
     return {
 
       id:
@@ -1741,6 +1745,11 @@
 
       chest:
         chestType,
+
+      eventId,
+
+      eventName:
+        getSelectedEventName(),
 
       startedAt:
         new Date()

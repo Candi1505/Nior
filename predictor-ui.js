@@ -1106,24 +1106,34 @@
     function renderSelectors() {
 
     const chestContainer =
-      document.getElementById(
-        "ccChestSelectors"
-      );
+  document.getElementById(
+    "ccChestSelectors"
+  );
 
 
-    chestContainer.innerHTML = [
+chestContainer.innerHTML = [
 
-      [
-        "gold",
-        "🥇 Gold"
-      ],
+  [
+    "gold",
+    "🥇 Gold"
+  ],
 
-      [
-        "platinum",
-        "💎 Platinum"
-      ]
+  [
+    "platinum",
+    "💎 Platinum"
+  ],
 
-    ]
+  [
+    "draconic",
+    "🐉 Draconic"
+  ],
+
+  [
+    "freedom",
+    "🦅 Freedom"
+  ]
+
+]
       .map(
         (
           [
@@ -2275,15 +2285,16 @@ document.getElementById(
   ) {
 
     if (
-      chestType === "gold" ||
-      chestType === "platinum"
-    ) {
+  chestType === "gold" ||
+  chestType === "platinum" ||
+  chestType === "draconic" ||
+  chestType === "freedom"
+) {
 
-      state.chestType =
-        chestType;
+  state.chestType =
+    chestType;
 
-
-    }
+}
 
 
     state.eventId =
@@ -2358,16 +2369,31 @@ document.getElementById(
       .toLowerCase();
 
     if (
-      text.includes("platinum")
-    ) {
-      return "platinum";
-    }
+  text.includes("draconic") ||
+  text.includes("drac")
+) {
+  return "draconic";
+}
 
-    if (text.includes("gold")) {
-      return "gold";
-    }
+if (
+  text.includes("freedom")
+) {
+  return "freedom";
+}
 
-    return null;
+if (
+  text.includes("platinum")
+) {
+  return "platinum";
+}
+
+if (
+  text.includes("gold")
+) {
+  return "gold";
+}
+
+return null;
   }
 
   function attachExistingPredictorButtons() {

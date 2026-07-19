@@ -158,7 +158,54 @@
             </span>
 
           </button>
+          <button
+            type="button"
+            class="chest-card draconic-card"
+            data-open-chest="draconic"
+          >
 
+            <span class="chest-symbol">
+              🐉
+            </span>
+
+            <span class="chest-card-text">
+
+              <strong>
+                Draconic
+              </strong>
+
+              <small>
+                Track &amp; Predict
+              </small>
+
+            </span>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="chest-card freedom-card"
+            data-open-chest="freedom"
+          >
+
+            <span class="chest-symbol">
+              🦅
+            </span>
+
+            <span class="chest-card-text">
+
+              <strong>
+                Freedom
+              </strong>
+
+              <small>
+                Track &amp; Predict
+              </small>
+
+            </span>
+
+          </button>
         </div>
 
 
@@ -190,8 +237,8 @@
 
           </div>
 
-          <p id="activeSessionText" class="muted-text">
-            Start Gold or Platinum tracking to build a visible sequence.
+                    <p id="activeSessionText" class="muted-text">
+            Choose a chest and begin recording rewards to locate your sequence.
           </p>
 
         </section>
@@ -565,6 +612,14 @@
             <option value="platinum">
               Platinum
             </option>
+            
+                        <option value="draconic">
+              Draconic
+            </option>
+
+            <option value="freedom">
+              Freedom
+            </option>
 
           </select>
 
@@ -600,10 +655,10 @@
       Upload Sequence Files
     </h2>
 
-    <p class="muted-text">
+        <p class="muted-text">
       Choose the current War Dragons event, then upload the matching
-      Gold or Platinum sequence spreadsheet. Chest Companion will read,
-      validate and prepare the file automatically.
+      Gold, Platinum, Draconic or Freedom sequence file. Chest Companion
+      will read, validate and prepare the file automatically.
     </p>
 
   </section>
@@ -800,6 +855,135 @@
     </button>
 
   </section>
+  
+    <!-- DRACONIC PREDICTOR -->
+
+  <section class="glass-panel content-panel">
+
+    <div class="section-heading">
+
+      <div>
+
+        <p class="eyebrow">
+          DRACONIC CHESTS
+        </p>
+
+        <h3>
+          Draconic Predictor
+        </h3>
+
+      </div>
+
+      <div id="draconicPredictorBadge" class="status-badge">
+        Not loaded
+      </div>
+
+    </div>
+
+    <p class="muted-text">
+      Upload the Draconic predictor sequence file for the selected event.
+    </p>
+
+    <input
+      id="draconicPredictorFile"
+      type="file"
+      accept=".csv,.xlsx,.xlsm"
+    >
+
+    <button
+      id="uploadDraconicPredictorButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Upload Draconic Sequence
+    </button>
+
+    <p
+      id="draconicPredictorStatus"
+      class="muted-text"
+    >
+      No Draconic sequence file uploaded for this event.
+    </p>
+
+    <div
+      id="draconicPredictorDetails"
+      class="predictor-file-details hidden"
+    ></div>
+
+    <button
+      id="clearDraconicPredictorButton"
+      class="button danger-button full-width-button hidden"
+      type="button"
+    >
+      Remove Draconic Sequence
+    </button>
+
+  </section>
+
+
+  <!-- FREEDOM PREDICTOR -->
+
+  <section class="glass-panel content-panel">
+
+    <div class="section-heading">
+
+      <div>
+
+        <p class="eyebrow">
+          FREEDOM CHESTS
+        </p>
+
+        <h3>
+          Freedom Predictor
+        </h3>
+
+      </div>
+
+      <div id="freedomPredictorBadge" class="status-badge">
+        Not loaded
+      </div>
+
+    </div>
+
+    <p class="muted-text">
+      Upload the Freedom predictor sequence file for the selected event.
+    </p>
+
+    <input
+      id="freedomPredictorFile"
+      type="file"
+      accept=".csv,.xlsx,.xlsm"
+    >
+
+    <button
+      id="uploadFreedomPredictorButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Upload Freedom Sequence
+    </button>
+
+    <p
+      id="freedomPredictorStatus"
+      class="muted-text"
+    >
+      No Freedom sequence file uploaded for this event.
+    </p>
+
+    <div
+      id="freedomPredictorDetails"
+      class="predictor-file-details hidden"
+    ></div>
+
+    <button
+      id="clearFreedomPredictorButton"
+      class="button danger-button full-width-button hidden"
+      type="button"
+    >
+      Remove Freedom Sequence
+    </button>
+
+  </section>
 
 
   <!-- ACTIVE PREDICTOR SUMMARY -->
@@ -815,7 +999,7 @@
     </h3>
 
     <p id="activePredictorSummary" class="muted-text">
-      Choose an event and upload a Gold or Platinum sequence file.
+            Choose an event and upload a sequence file for the chest you want to use.
     </p>
 
   </section>
@@ -841,9 +1025,8 @@
           <hr>
 
           <p class="muted-text">
-            Created for Gold and Platinum chest tracking.
-            Silver, Bronze and Drac are intentionally excluded
-            from this release.
+                        Created for Gold, Platinum, Draconic and Freedom
+            chest tracking and sequence prediction.
           </p>
 
         </section>

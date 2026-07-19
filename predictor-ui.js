@@ -2320,6 +2320,84 @@
     attachPredictorEvents();
     attachExistingPredictorButtons();
     addPredictorLauncher();
+        window.addEventListener(
+      "chest-companion-event-changed",
+      async event => {
+
+        state.eventId =
+          event.detail?.eventId ||
+          "";
+
+        state.selectedRarity =
+          "";
+
+        saveState();
+
+        await activateCurrentPredictor();
+
+        const overlay =
+          document.getElementById(
+            "ccPredictorOverlay"
+          );
+
+        if (
+          overlay?.classList.contains(
+            "cc-open"
+          )
+        ) {
+
+          renderEverything();
+
+        }
+
+      }
+    );
+
+
+    window.addEventListener(
+      "chest-companion-workbook-imported",
+      async event => {
+
+        const importedEvent =
+          event.detail?.eventId;
+
+        const importedChest =
+          event.detail?.chestType;
+
+
+        if (
+          importedEvent !==
+            getActiveEventId() ||
+          importedChest !==
+            state.chestType
+        ) {
+
+          return;
+
+        }
+
+
+        await activateCurrentPredictor();
+
+
+        const overlay =
+          document.getElementById(
+            "ccPredictorOverlay"
+          );
+
+
+        if (
+          overlay?.classList.contains(
+            "cc-open"
+          )
+        ) {
+
+          renderEverything();
+
+        }
+
+      }
+    );
 
     const observer =
       new MutationObserver(() => {

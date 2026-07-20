@@ -1057,7 +1057,7 @@
         record
       );
 
-      updateActivePredictorSummary();
+            await updateActivePredictorSummary();
 
       console.info(
         `[Chest Companion] ${record.id} imported.`,
@@ -1258,7 +1258,7 @@
       )
     ]);
 
-    updateActivePredictorSummary();
+    await updateActivePredictorSummary();
 
     window.dispatchEvent(
       new CustomEvent(
@@ -1341,7 +1341,7 @@
         chestType
       );
 
-      updateActivePredictorSummary();
+            await updateActivePredictorSummary();
 
       window.dispatchEvent(
         new CustomEvent(

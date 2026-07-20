@@ -269,7 +269,7 @@ window.ChestDatabase = {
 
     return data;
 
-  }
+  },
   async getPredictor(chestType) {
 
   const supabaseClient =
@@ -294,7 +294,7 @@ window.ChestDatabase = {
 
   return data;
 
-}
+},
 async savePredictor({
   chestType,
   version,
@@ -315,11 +315,16 @@ async savePredictor({
     .trim()
     .toLowerCase();
 
-  if (
-    !["gold", "platinum", "draconic"].includes(
-      normalisedChestType
-    )
-  ) {
+    if (
+  ![
+    "gold",
+    "platinum",
+    "draconic",
+    "freedom"
+  ].includes(
+    normalisedChestType
+  )
+) {
     throw new Error(
       "Unsupported chest type."
     );

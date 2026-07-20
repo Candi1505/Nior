@@ -1,152 +1,315 @@
 /* ============================================================
    CHEST COMPANION BETA
-   LIVE PREDICTOR ENGINE
-
-   Uses live about_v2 event data instead of spreadsheet files.
+   LIVE PREDICTOR UI
 
    ============================================================ */
 
-(function initialiseLivePredictor(window) {
+(function initialiseLivePredictorUI(window) {
     "use strict";
 
-    const SUPPORTED_CHESTS = [
-        "gold",
-        "platinum",
-        "draconic",
-        "freedom"
-    ];
+    const Engine = window.LivePredictorEngine;
 
-    let activeChest = "gold";
-    let activeEvent = null;
-
-    function getEventData() {
-        return window.currentEventData || null;
-    }
-
-    function isReady() {
-        const event = getEventData();
-
-        return !!(
-            event &&
-            event.ready &&
-            event.chests
+    if (!Engine) {
+        console.error(
+            "[Chest Companion] live-predictor-engine.js not loaded."
         );
+        return;
     }
 
-    function getEventName() {
-        const event = getEventData();
+    function addStyles() {
 
-        return event?.event || "Unknown Event";
-    }
-
-    function setActiveChest(chest) {
-
-        if (SUPPORTED_CHESTS.includes(chest)) {
-            activeChest = chest;
+        if (document.getElementById("livePredictorStyles")) {
+            return;
         }
 
+        const style = document.createElement("style");
+
+        style.id = "livePredictorStyles";
+
+        style.textContent = `
+
+#livePredictor {
+
+    position: fixed;
+    inset: 0;
+
+    background:#050505;
+
+    color:#d7d7d7;
+
+    z-index:999999;
+
+    display:none;
+
+    overflow:auto;
+
+    font-family:Inter,sans-serif;
+
+}
+
+#livePredictor.open{
+
+    display:block;
+
+}
+
+.lp-shell{
+
+    max-width:700px;
+
+    margin:30px auto;
+
+    padding:20px;
+
+}
+
+.lp-card{
+
+    background:#111;
+
+    border:1px solid #292929;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    margin-bottom:16px;
+
+}
+
+.lp-card h2{
+
+    margin-top:0;
+
+    color:#d9bf76;
+
+}
+
+.lp-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,1fr);
+
+    gap:12px;
+
+}
+
+.lp-item{
+
+    background:#181818;
+
+    border-radius:12px;
+
+    padding:14px;
+
+}
+
+.lp-item strong{
+
+    display:block;
+
+    color:#fff;
+
+}
+
+.lp-close{
+
+    width:100%;
+
+    padding:14px;
+
+    margin-top:20px;
+
+    border:none;
+
+    border-radius:14px;
+
+    background:#d9bf76;
+
+    color:#000;
+
+    font-weight:bold;
+
+    cursor:pointer;
+
+}
+
+`;
+        document.head.appendChild(style);
+
     }
 
-    function getActiveChest() {
-        return activeChest;
-    }
+    function createUI() {
 
-    function getChest(chest = activeChest) {
-
-        const event = getEventData();
-
-        if (!event) {
-            return null;
+        if (document.getElementById("livePredictor")) {
+            return;
         }
 
-        return event.chests[chest] || null;
+        const ui = document.createElement("div");
+
+        ui.id = "livePredictor";
+
+        ui.innerHTML = `
+
+<div class="lp-shell">
+
+<div class="lp-card">
+
+<h2>Live Event Predictor</h2>
+
+<div id="lpEvent"></div>
+
+</div>
+
+<div class="lp-card">
+
+<h2>Chest Decks</h2>
+
+<div
+id="lpDecks"
+class="lp-grid">
+</div>
+
+</div>
+
+<button
+class="lp-close"
+id="lpClose">
+
+Close
+
+</button>
+
+</div>
+
+`;
+
+        document.body.appendChild(ui);
 
     }
 
-    function getDeck(chest = activeChest) {
+    function render() {
 
-        const chestData = getChest(chest);
+        const status =
+            Engine.getStatus();
 
-        if (!chestData) {
-            return [];
-        }
+        document.getElementById(
+            "lpEvent"
+        ).innerHTML = `
 
-        return chestData.deck || [];
+<strong>Event</strong>
 
-    }
+${status.event}
 
-    function getCurrentIndex(chest = activeChest) {
+<br><br>
 
-        const chestData = getChest(chest);
+<strong>Status</strong>
 
-        if (!chestData) {
-            return null;
-        }
+${status.ready ? "🟢 Ready" : "🔴 Not Ready"}
 
-        return chestData.index;
+`;
 
-    }
+        document.getElementById(
+            "lpDecks"
+        ).innerHTML = status.chests.map(
 
-    function getDeckLength(chest = activeChest) {
+            chest => `
 
-        return getDeck(chest).length;
+<div class="lp-item">
 
-    }
+<strong>
 
-    function getStatus() {
+${chest.chest.toUpperCase()}
 
-        return {
+</strong>
 
-            ready: isReady(),
+Deck Length
 
-            event: getEventName(),
+<br>
 
-            activeChest,
+${chest.length}
 
-            chests: SUPPORTED_CHESTS.map(chest => {
+<br><br>
 
-                const deck = getDeck(chest);
+Current Index
 
-                return {
+<br>
 
-                    chest,
+${chest.index}
 
-                    length: deck.length,
+</div>
 
-                    index: getCurrentIndex(chest),
+`
 
-                    loaded: deck.length > 0
-
-                };
-
-            })
-
-        };
+        ).join("");
 
     }
 
-    window.LivePredictorEngine = Object.freeze({
+    function open() {
 
-        isReady,
+        render();
 
-        getStatus,
+        document
+            .getElementById(
+                "livePredictor"
+            )
+            .classList.add("open");
 
-        getEventName,
+    }
 
-        setActiveChest,
+    function close() {
 
-        getActiveChest,
+        document
+            .getElementById(
+                "livePredictor"
+            )
+            .classList.remove("open");
 
-        getDeck,
+    }
 
-        getDeckLength,
+    function initialise() {
 
-        getCurrentIndex
+        addStyles();
+
+        createUI();
+
+        document
+            .getElementById("lpClose")
+            .addEventListener(
+                "click",
+                close
+            );
+
+        console.info(
+            "[Chest Companion] Live Predictor UI ready."
+        );
+
+    }
+
+    if (
+        document.readyState === "loading"
+    ) {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            initialise
+        );
+
+    } else {
+
+        initialise();
+
+    }
+
+    window.LivePredictorUI = Object.freeze({
+
+        open,
+
+        close,
+
+        render
 
     });
-
-    console.info(
-        "[Chest Companion] Live Predictor Engine ready."
-    );
 
 })(window);

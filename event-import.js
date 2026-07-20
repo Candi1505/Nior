@@ -2,72 +2,407 @@
 
 /*
  * Noir Chest Companion
- * Live about_v2 importer
+ * Live about_v2 event importer
+ *
+ * Responsibilities:
+ * - Read an uploaded .json or .txt file
+ * - Parse the War Dragons about_v2 response
+ * - Detect Gold, Platinum, Draconic and Freedom decks
+ * - Display developer diagnostics
+ * - Store the parsed event data for the rest of the app
  */
 
-const importButton = document.getElementById("importEventDataButton");
-const fileInput = document.getElementById("eventDataFile");
-const status = document.getElementById("eventImportStatus");
-const badge = document.getElementById("eventImportBadge");
-const results = document.getElementById("eventImportResults");
+document.addEventListener("DOMContentLoaded", () => {
+  const importButton = document.getElementById("importEventDataButton");
+  const fileInput = document.getElementById("eventDataFile");
+  const statusText = document.getElementById("eventImportStatus");
+  const badge = document.getElementById("eventImportBadge");
+  const results = document.getElementById("eventImportResults");
 
-if (importButton) {
+  if (
+    !importButton ||
+    !fileInput ||
+    !statusText ||
+    !badge ||
+    !results
+  ) {
+    console.warn(
+      "Live event importer could not initialise because one or more interface elements are missing."
+    );
 
-    importButton.addEventListener("click", async () => {
+    return;
+  }
 
-        if (!fileInput.files.length) {
-            status.textContent = "Please choose an about_v2 file first.";
-            return;
+  function setBadge(text, state = "") {
+    badge.textContent = text;
+
+    badge.classList.remove(
+      "ready",
+      "failed",
+      "loading"
+    );
+
+    if (state) {
+      badge.classList.add(state);
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function formatValue(value) {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ""
+    ) {
+      return "—";
+    }
+
+    if (typeof value === "object") {
+      try {
+        return escapeHtml(JSON.stringify(value));
+      } catch (error) {
+        return "[Object]";
+      }
+    }
+
+    return escapeHtml(value);
+  }
+
+  function createChestRow(chest) {
+    const warnings = Array.isArray(chest.warnings)
+      ? chest.warnings
+      : [];
+
+    const warningText = warnings.length
+      ? `
+        <details class="developer-warning">
+          <summary>
+            ${warnings.length} warning${warnings.length === 1 ? "" : "s"}
+          </summary>
+
+          <ul>
+            ${warnings
+              .map(
+                warning => `
+                  <li>${escapeHtml(warning)}</li>
+                `
+              )
+              .join("")}
+          </ul>
+        </details>
+      `
+      : "";
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(chest.label)}</strong>
+          <small>${escapeHtml(chest.key)}</small>
+        </td>
+
+        <td>
+          ${chest.found ? "✅" : "❌"}
+        </td>
+
+        <td>
+          ${formatValue(chest.index)}
+        </td>
+
+        <td>
+          ${formatValue(chest.deckLength)}
+        </td>
+
+        <td>
+          ${formatValue(chest.currentValue)}
+        </td>
+      </tr>
+
+      ${
+        warningText
+          ? `
+            <tr>
+              <td colspan="5">
+                ${warningText}
+              </td>
+            </tr>
+          `
+          : ""
+      }
+    `;
+  }
+
+  function renderResults(parsed) {
+    const chestRows = Object.values(parsed.chests)
+      .map(createChestRow)
+      .join("");
+
+    const readyText = parsed.ready
+      ? `${parsed.readyChestCount} chest deck(s) ready`
+      : "No supported chest decks were detected";
+
+    results.innerHTML = `
+      <div class="developer-summary">
+
+        <p class="eyebrow">
+          IMPORTED EVENT
+        </p>
+
+        <h3>
+          ${escapeHtml(parsed.event)}
+        </h3>
+
+        <p class="muted-text">
+          ${escapeHtml(readyText)}
+        </p>
+
+      </div>
+
+      <div class="developer-table-wrapper">
+
+        <table class="developer-table">
+
+          <thead>
+            <tr>
+              <th>Chest</th>
+              <th>Found</th>
+              <th>Index</th>
+              <th>Length</th>
+              <th>Current</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${chestRows}
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <details class="developer-details">
+
+        <summary>
+          Available deck keys
+        </summary>
+
+        <div class="developer-key-list">
+          ${
+            parsed.availableDeckKeys.length
+              ? parsed.availableDeckKeys
+                  .map(
+                    key => `
+                      <code>${escapeHtml(key)}</code>
+                    `
+                  )
+                  .join("")
+              : `
+                <span class="muted-text">
+                  No deck keys found.
+                </span>
+              `
+          }
+        </div>
+
+      </details>
+
+      <details class="developer-details">
+
+        <summary>
+          Available deck index keys
+        </summary>
+
+        <div class="developer-key-list">
+          ${
+            parsed.availableIndexKeys.length
+              ? parsed.availableIndexKeys
+                  .map(
+                    key => `
+                      <code>${escapeHtml(key)}</code>
+                    `
+                  )
+                  .join("")
+              : `
+                <span class="muted-text">
+                  No deck index keys found.
+                </span>
+              `
+          }
+        </div>
+
+      </details>
+    `;
+
+    results.classList.remove("hidden");
+  }
+
+  function updateLegacyPredictorBadges(parsed) {
+    const badgeMap = {
+      gold: document.getElementById("goldPredictorBadge"),
+      platinum: document.getElementById("platinumPredictorBadge"),
+      draconic: document.getElementById("draconicPredictorBadge"),
+      freedom: document.getElementById("freedomPredictorBadge")
+    };
+
+    Object.entries(badgeMap).forEach(
+      ([chestType, chestBadge]) => {
+        if (!chestBadge) {
+          return;
         }
 
-        const file = fileInput.files[0];
+        const chest = parsed.chests[chestType];
 
-        try {
+        chestBadge.textContent = chest?.found
+          ? "Live data ready"
+          : "Not detected";
+      }
+    );
+  }
 
-            status.textContent = "Reading event...";
+  async function importEventFile() {
+    const file = fileInput.files?.[0];
 
-            const text = await file.text();
+    if (!file) {
+      setBadge("Choose file", "failed");
+      statusText.textContent =
+        "Please choose an about_v2 JSON or text file first.";
 
-            const parsed = EventParser.parse(text);
+      results.classList.add("hidden");
 
-            window.currentEventData = parsed;
+      return;
+    }
 
-            badge.textContent = "Ready";
+    if (typeof window.EventParser !== "function") {
+      setBadge("Unavailable", "failed");
+      statusText.textContent =
+        "The event parser did not load. Check that event-parser.js is included before event-import.js.";
 
-            status.textContent =
-                `${parsed.readyChestCount} chest deck(s) detected`;
+      console.error(
+        "EventParser is unavailable. Confirm script order in index.html."
+      );
 
-            results.classList.remove("hidden");
+      return;
+    }
 
-            results.innerHTML = `
-                <strong>${parsed.event}</strong><br><br>
+    importButton.disabled = true;
+    fileInput.disabled = true;
 
-                Gold:
-                ${parsed.chests.gold.found ? "✅" : "❌"}<br>
+    setBadge("Reading...", "loading");
 
-                Platinum:
-                ${parsed.chests.platinum.found ? "✅" : "❌"}<br>
+    statusText.textContent =
+      `Reading ${file.name}...`;
 
-                Draconic:
-                ${parsed.chests.draconic.found ? "✅" : "❌"}<br>
+    results.classList.add("hidden");
 
-                Freedom:
-                ${parsed.chests.freedom.found ? "✅" : "❌"}
-            `;
+    try {
+      const rawText = await file.text();
 
-            console.log(parsed);
+      if (!rawText.trim()) {
+        throw new Error(
+          "The selected event file is empty."
+        );
+      }
 
-        }
-        catch (error) {
+      const parsed = window.EventParser.parse(rawText);
 
-            console.error(error);
+      window.currentEventData = parsed;
+      window.currentEventSourceFile = {
+        name: file.name,
+        size: file.size,
+        type: file.type || "unknown",
+        importedAt: new Date().toISOString()
+      };
 
-            badge.textContent = "Failed";
+      setBadge(
+        parsed.ready ? "Ready" : "Incomplete",
+        parsed.ready ? "ready" : "failed"
+      );
 
-            status.textContent = error.message;
+      statusText.textContent =
+        `${parsed.readyChestCount} chest deck(s) detected from ${file.name}.`;
 
-        }
+      renderResults(parsed);
+      updateLegacyPredictorBadges(parsed);
 
-    });
+      document.dispatchEvent(
+        new CustomEvent("noir:event-imported", {
+          detail: {
+            parsed,
+            file: window.currentEventSourceFile
+          }
+        })
+      );
 
-}
+      console.group("🐉 Noir Live Event Import");
+      console.log("Source file:", window.currentEventSourceFile);
+      console.log("Parsed event:", parsed);
+      console.groupEnd();
+    } catch (error) {
+      console.error(
+        "Live event import failed:",
+        error
+      );
+
+      window.currentEventData = null;
+
+      setBadge("Failed", "failed");
+
+      statusText.textContent =
+        error instanceof Error
+          ? error.message
+          : "The event file could not be imported.";
+
+      results.innerHTML = `
+        <div class="developer-error">
+
+          <strong>
+            Import failed
+          </strong>
+
+          <p class="muted-text">
+            ${escapeHtml(
+              error instanceof Error
+                ? error.message
+                : "Unknown import error."
+            )}
+          </p>
+
+        </div>
+      `;
+
+      results.classList.remove("hidden");
+    } finally {
+      importButton.disabled = false;
+      fileInput.disabled = false;
+    }
+  }
+
+  importButton.addEventListener(
+    "click",
+    importEventFile
+  );
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+
+    if (!file) {
+      setBadge("Not imported");
+      statusText.textContent =
+        "No live event data imported.";
+
+      return;
+    }
+
+    setBadge("File selected");
+
+    statusText.textContent =
+      `${file.name} is ready to import.`;
+  });
+});

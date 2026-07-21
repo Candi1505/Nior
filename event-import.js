@@ -2,25 +2,39 @@
 
 /*
  * Noir Chest Companion
- * Live about_v2 event importer
+ * Live event and HAR chest-history importer
  *
  * Responsibilities:
  * - Read an uploaded .json, .txt or .har file
  * - Parse the War Dragons about_v2 response
  * - Detect Gold, Platinum, Draconic and Freedom decks
- * - Display developer diagnostics
- * - Store the parsed event data for the rest of the app
+ * - Parse use_gacha requests when the file is a HAR capture
+ * - Store event information and chest-opening history
+ * - Restore imported information after the app reloads
+ * - Notify the rest of Noir when new data becomes available
  */
 
 const LIVE_EVENT_STORAGE_KEY =
   "chestCompanionLiveEventData";
 
+const LIVE_GACHA_STORAGE_KEY =
+  "chestCompanionLiveGachaData";
+
 document.addEventListener("DOMContentLoaded", () => {
-  const importButton = document.getElementById("importEventDataButton");
-  const fileInput = document.getElementById("eventDataFile");
-  const statusText = document.getElementById("eventImportStatus");
-  const badge = document.getElementById("eventImportBadge");
-  const results = document.getElementById("eventImportResults");
+  const importButton =
+    document.getElementById("importEventDataButton");
+
+  const fileInput =
+    document.getElementById("eventDataFile");
+
+  const statusText =
+    document.getElementById("eventImportStatus");
+
+  const badge =
+    document.getElementById("eventImportBadge");
+
+  const results =
+    document.getElementById("eventImportResults");
 
   if (
     !importButton ||
@@ -30,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
     !results
   ) {
     console.warn(
-      "Live event importer could not initialise because one or more interface elements are missing."
+      "[Chest Companion] Live event importer could not initialise because one or more interface elements are missing."
     );
 
     return;
@@ -70,7 +84,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (typeof value === "object") {
       try {
-        return escapeHtml(JSON.stringify(value));
+        return escapeHtml(
+          JSON.stringify(value)
+        );
       } catch (error) {
         return "[Object]";
       }
@@ -80,7 +96,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function createChestRow(chest) {
-    const warnings = Array.isArray(chest.warnings)
+    const warnings = Array.isArray(
+      chest?.warnings
+    )
       ? chest.warnings
       : [];
 
@@ -88,14 +106,17 @@ document.addEventListener("DOMContentLoaded", () => {
       ? `
         <details class="developer-warning">
           <summary>
-            ${warnings.length} warning${warnings.length === 1 ? "" : "s"}
+            ${warnings.length}
+            warning${warnings.length === 1 ? "" : "s"}
           </summary>
 
           <ul>
             ${warnings
               .map(
                 warning => `
-                  <li>${escapeHtml(warning)}</li>
+                  <li>
+                    ${escapeHtml(warning)}
+                  </li>
                 `
               )
               .join("")}
@@ -107,24 +128,29 @@ document.addEventListener("DOMContentLoaded", () => {
     return `
       <tr>
         <td>
-          <strong>${escapeHtml(chest.label)}</strong>
-          <small>${escapeHtml(chest.key)}</small>
+          <strong>
+            ${escapeHtml(chest?.label)}
+          </strong>
+
+          <small>
+            ${escapeHtml(chest?.key)}
+          </small>
         </td>
 
         <td>
-          ${chest.found ? "✅" : "❌"}
+          ${chest?.found ? "✅" : "❌"}
         </td>
 
         <td>
-          ${formatValue(chest.index)}
+          ${formatValue(chest?.index)}
         </td>
 
         <td>
-          ${formatValue(chest.deckLength)}
+          ${formatValue(chest?.deckLength)}
         </td>
 
         <td>
-          ${formatValue(chest.currentValue)}
+          ${formatValue(chest?.currentValue)}
         </td>
       </tr>
 
@@ -142,14 +168,160 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
-  function renderResults(parsed) {
-    const chestRows = Object.values(parsed.chests)
+  function getGachaOpeningCount(gachaData) {
+    if (!gachaData) {
+      return 0;
+    }
+
+    const possibleArrays = [
+      gachaData.openings,
+      gachaData.history,
+      gachaData.rewardHistory,
+      gachaData.entries,
+      gachaData.requests,
+      gachaData.results
+    ];
+
+    const matchingArray =
+      possibleArrays.find(Array.isArray);
+
+    if (matchingArray) {
+      return matchingArray.length;
+    }
+
+    const possibleCounts = [
+      gachaData.openingCount,
+      gachaData.requestCount,
+      gachaData.historyCount,
+      gachaData.totalOpenings,
+      gachaData.totalRequests,
+      gachaData.processedEntryCount
+    ];
+
+    const matchingCount =
+      possibleCounts.find(
+        value =>
+          Number.isFinite(Number(value))
+      );
+
+    return matchingCount === undefined
+      ? 0
+      : Number(matchingCount);
+  }
+
+  function getGachaBonusCount(gachaData) {
+    if (!gachaData) {
+      return 0;
+    }
+
+    const possibleArrays = [
+      gachaData.bonusClaims,
+      gachaData.bonuses
+    ];
+
+    const matchingArray =
+      possibleArrays.find(Array.isArray);
+
+    if (matchingArray) {
+      return matchingArray.length;
+    }
+
+    const history =
+      gachaData.openings ||
+      gachaData.history ||
+      gachaData.rewardHistory ||
+      gachaData.entries ||
+      [];
+
+    if (!Array.isArray(history)) {
+      return 0;
+    }
+
+    return history.filter(entry =>
+      Boolean(
+        entry?.bonus ||
+        entry?.isBonus ||
+        entry?.bonusClaim ||
+        entry?.claimType === "bonus" ||
+        entry?.claimOptionsType ===
+          "claim_Bonus"
+      )
+    ).length;
+  }
+
+  function renderResults(
+    parsed,
+    gachaData = null
+  ) {
+    const chests =
+      parsed?.chests &&
+      typeof parsed.chests === "object"
+        ? parsed.chests
+        : {};
+
+    const chestRows = Object.values(chests)
       .map(createChestRow)
       .join("");
 
-    const readyText = parsed.ready
-      ? `${parsed.readyChestCount} chest deck(s) ready`
+    const readyText = parsed?.ready
+      ? `${parsed.readyChestCount || 0} chest deck(s) ready`
       : "No supported chest decks were detected";
+
+    const gachaOpeningCount =
+      getGachaOpeningCount(gachaData);
+
+    const gachaBonusCount =
+      getGachaBonusCount(gachaData);
+
+    const gachaSummary = gachaData
+      ? `
+        <div class="developer-summary">
+
+          <p class="eyebrow">
+            HAR CHEST HISTORY
+          </p>
+
+          <h3>
+            ${gachaOpeningCount}
+            opening request${gachaOpeningCount === 1 ? "" : "s"}
+          </h3>
+
+          <p class="muted-text">
+            ${gachaBonusCount}
+            bonus claim${gachaBonusCount === 1 ? "" : "s"}
+            detected.
+          </p>
+
+        </div>
+      `
+      : `
+        <div class="developer-summary">
+
+          <p class="eyebrow">
+            CHEST HISTORY
+          </p>
+
+          <h3>
+            No use_gacha history detected
+          </h3>
+
+          <p class="muted-text">
+            Event data was imported successfully, but this
+            file did not contain HAR chest-opening requests.
+          </p>
+
+        </div>
+      `;
+
+    const availableDeckKeys =
+      Array.isArray(parsed?.availableDeckKeys)
+        ? parsed.availableDeckKeys
+        : [];
+
+    const availableIndexKeys =
+      Array.isArray(parsed?.availableIndexKeys)
+        ? parsed.availableIndexKeys
+        : [];
 
     results.innerHTML = `
       <div class="developer-summary">
@@ -159,7 +331,9 @@ document.addEventListener("DOMContentLoaded", () => {
         </p>
 
         <h3>
-          ${escapeHtml(parsed.event)}
+          ${escapeHtml(
+            parsed?.event || "Unknown event"
+          )}
         </h3>
 
         <p class="muted-text">
@@ -167,6 +341,8 @@ document.addEventListener("DOMContentLoaded", () => {
         </p>
 
       </div>
+
+      ${gachaSummary}
 
       <div class="developer-table-wrapper">
 
@@ -183,7 +359,16 @@ document.addEventListener("DOMContentLoaded", () => {
           </thead>
 
           <tbody>
-            ${chestRows}
+            ${
+              chestRows ||
+              `
+                <tr>
+                  <td colspan="5">
+                    No supported chest information was found.
+                  </td>
+                </tr>
+              `
+            }
           </tbody>
 
         </table>
@@ -198,11 +383,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="developer-key-list">
           ${
-            parsed.availableDeckKeys.length
-              ? parsed.availableDeckKeys
+            availableDeckKeys.length
+              ? availableDeckKeys
                   .map(
                     key => `
-                      <code>${escapeHtml(key)}</code>
+                      <code>
+                        ${escapeHtml(key)}
+                      </code>
                     `
                   )
                   .join("")
@@ -224,11 +411,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
         <div class="developer-key-list">
           ${
-            parsed.availableIndexKeys.length
-              ? parsed.availableIndexKeys
+            availableIndexKeys.length
+              ? availableIndexKeys
                   .map(
                     key => `
-                      <code>${escapeHtml(key)}</code>
+                      <code>
+                        ${escapeHtml(key)}
+                      </code>
                     `
                   )
                   .join("")
@@ -248,10 +437,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateLegacyPredictorBadges(parsed) {
     const badgeMap = {
-      gold: document.getElementById("goldPredictorBadge"),
-      platinum: document.getElementById("platinumPredictorBadge"),
-      draconic: document.getElementById("draconicPredictorBadge"),
-      freedom: document.getElementById("freedomPredictorBadge")
+      gold:
+        document.getElementById(
+          "goldPredictorBadge"
+        ),
+
+      platinum:
+        document.getElementById(
+          "platinumPredictorBadge"
+        ),
+
+      draconic:
+        document.getElementById(
+          "draconicPredictorBadge"
+        ),
+
+      freedom:
+        document.getElementById(
+          "freedomPredictorBadge"
+        )
     };
 
     Object.entries(badgeMap).forEach(
@@ -260,35 +464,221 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        const chest = parsed.chests[chestType];
+        const chest =
+          parsed?.chests?.[chestType];
 
-        chestBadge.textContent = chest?.found
-          ? "Live data ready"
-          : "Not detected";
+        chestBadge.textContent =
+          chest?.found
+            ? "Live data ready"
+            : "Not detected";
       }
     );
   }
 
+  function parseHarGachaData(rawText) {
+    if (
+      !window.HarGachaParser ||
+      typeof window.HarGachaParser.parse !==
+        "function"
+    ) {
+      console.warn(
+        "[Chest Companion] HarGachaParser is unavailable. Confirm har-gacha-parser.js loads before event-import.js."
+      );
+
+      return null;
+    }
+
+    let possibleHar;
+
+    try {
+      possibleHar = JSON.parse(rawText);
+    } catch (error) {
+      return null;
+    }
+
+    const entries =
+      possibleHar?.log?.entries;
+
+    if (!Array.isArray(entries)) {
+      return null;
+    }
+
+    const hasGachaRequests =
+      entries.some(entry => {
+        const url = String(
+          entry?.request?.url || ""
+        );
+
+        return url.includes(
+          "/ext/dragonsong/event/use_gacha"
+        );
+      });
+
+    if (!hasGachaRequests) {
+      return null;
+    }
+
+    try {
+      return window.HarGachaParser.parse(
+        possibleHar
+      );
+    } catch (objectError) {
+      /*
+       * Some parser versions may expect the original
+       * JSON text instead of the already-parsed object.
+       */
+      try {
+        return window.HarGachaParser.parse(
+          rawText
+        );
+      } catch (textError) {
+        console.warn(
+          "[Chest Companion] HAR gacha requests were found, but they could not be parsed.",
+          textError
+        );
+
+        return null;
+      }
+    }
+  }
+
+  function saveImportedData(
+    parsed,
+    gachaData,
+    sourceFile
+  ) {
+    try {
+      localStorage.setItem(
+        LIVE_EVENT_STORAGE_KEY,
+        JSON.stringify({
+          data: parsed,
+          sourceFile
+        })
+      );
+    } catch (error) {
+      console.warn(
+        "[Chest Companion] Could not save live event data.",
+        error
+      );
+    }
+
+    if (gachaData) {
+      try {
+        localStorage.setItem(
+          LIVE_GACHA_STORAGE_KEY,
+          JSON.stringify({
+            data: gachaData,
+            sourceFile
+          })
+        );
+      } catch (error) {
+        console.warn(
+          "[Chest Companion] Could not save HAR gacha history.",
+          error
+        );
+      }
+
+      return;
+    }
+
+    /*
+     * Remove history from an older import so it cannot
+     * become mixed with the newly imported event.
+     */
+    try {
+      localStorage.removeItem(
+        LIVE_GACHA_STORAGE_KEY
+      );
+    } catch (error) {
+      console.warn(
+        "[Chest Companion] Could not clear old HAR gacha history.",
+        error
+      );
+    }
+  }
+
+  function dispatchImportedEvent({
+    parsed,
+    gachaData,
+    sourceFile,
+    restored = false
+  }) {
+    const detail = {
+      restored,
+      parsed,
+      eventData: parsed,
+      gachaData,
+      file: sourceFile,
+      sourceFile
+    };
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "noir:event-imported",
+        { detail }
+      )
+    );
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "noir:event-imported",
+        { detail }
+      )
+    );
+
+    /*
+     * This additional event gives future predictor
+     * components a dedicated chest-history signal.
+     */
+    if (gachaData) {
+      window.dispatchEvent(
+        new CustomEvent(
+          "noir:gacha-imported",
+          {
+            detail: {
+              restored,
+              gachaData,
+              eventData: parsed,
+              sourceFile
+            }
+          }
+        )
+      );
+    }
+  }
+
   async function importEventFile() {
-    const file = fileInput.files?.[0];
+    const file =
+      fileInput.files?.[0];
 
     if (!file) {
-      setBadge("Choose file", "failed");
+      setBadge(
+        "Choose file",
+        "failed"
+      );
+
       statusText.textContent =
-        "Please choose an about_v2 JSON or text file first.";
+        "Please choose an about_v2 JSON, text or HAR file first.";
 
       results.classList.add("hidden");
 
       return;
     }
 
-    if (typeof window.EventParser !== "function") {
-      setBadge("Unavailable", "failed");
+    if (
+      typeof window.EventParser !==
+      "function"
+    ) {
+      setBadge(
+        "Unavailable",
+        "failed"
+      );
+
       statusText.textContent =
         "The event parser did not load. Check that event-parser.js is included before event-import.js.";
 
       console.error(
-        "EventParser is unavailable. Confirm script order in index.html."
+        "[Chest Companion] EventParser is unavailable. Confirm the script order in index.html."
       );
 
       return;
@@ -297,7 +687,10 @@ document.addEventListener("DOMContentLoaded", () => {
     importButton.disabled = true;
     fileInput.disabled = true;
 
-    setBadge("Reading...", "loading");
+    setBadge(
+      "Reading...",
+      "loading"
+    );
 
     statusText.textContent =
       `Reading ${file.name}...`;
@@ -305,7 +698,8 @@ document.addEventListener("DOMContentLoaded", () => {
     results.classList.add("hidden");
 
     try {
-      const rawText = await file.text();
+      const rawText =
+        await file.text();
 
       if (!rawText.trim()) {
         throw new Error(
@@ -313,74 +707,116 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
 
-      const parsed = window.EventParser.parse(rawText);
+      /*
+       * har-event-adapter.js allows EventParser to accept
+       * either a direct about_v2 response or a complete HAR.
+       */
+      const parsed =
+        window.EventParser.parse(rawText);
 
-      window.currentEventData = parsed;
-      window.currentEventSourceFile = {
+      const gachaData =
+        parseHarGachaData(rawText);
+
+      const sourceFile = {
         name: file.name,
         size: file.size,
-        type: file.type || "unknown",
-        importedAt: new Date().toISOString()
+        type:
+          file.type || "unknown",
+        importedAt:
+          new Date().toISOString()
       };
-try {
-  localStorage.setItem(
-    LIVE_EVENT_STORAGE_KEY,
-    JSON.stringify({
-      data: parsed,
-      sourceFile:
-        window.currentEventSourceFile
-    })
-  );
-} catch (error) {
-  console.warn(
-    "[Chest Companion] Could not save live event data.",
-    error
-  );
-}
-      setBadge(
-        parsed.ready ? "Ready" : "Incomplete",
-        parsed.ready ? "ready" : "failed"
+
+      window.currentEventData =
+        parsed;
+
+      window.currentGachaData =
+        gachaData;
+
+      window.currentEventSourceFile =
+        sourceFile;
+
+      saveImportedData(
+        parsed,
+        gachaData,
+        sourceFile
       );
+
+      setBadge(
+        parsed.ready
+          ? "Ready"
+          : "Incomplete",
+        parsed.ready
+          ? "ready"
+          : "failed"
+      );
+
+      const openingCount =
+        getGachaOpeningCount(gachaData);
+
+      const gachaStatus =
+        gachaData
+          ? ` ${openingCount} chest-opening request${
+              openingCount === 1
+                ? ""
+                : "s"
+            } also detected.`
+          : " No chest-opening history was detected.";
 
       statusText.textContent =
-        `${parsed.readyChestCount} chest deck(s) detected from ${file.name}.`;
+        `${parsed.readyChestCount || 0} chest deck(s) detected from ${file.name}.${gachaStatus}`;
 
-      renderResults(parsed);
-      updateLegacyPredictorBadges(parsed);
-
-      document.dispatchEvent(
-        new CustomEvent("noir:event-imported", {
-          detail: {
-            parsed,
-            file: window.currentEventSourceFile
-          }
-        })
+      renderResults(
+        parsed,
+        gachaData
       );
-      window.dispatchEvent(
-  new CustomEvent("noir:event-imported", {
-    detail: {
-      parsed,
-      eventData: parsed,
-      file: window.currentEventSourceFile,
-      sourceFile:
-        window.currentEventSourceFile
-    }
-  })
-);
 
-      console.group("🐉 Noir Live Event Import");
-      console.log("Source file:", window.currentEventSourceFile);
-      console.log("Parsed event:", parsed);
+      updateLegacyPredictorBadges(
+        parsed
+      );
+
+      dispatchImportedEvent({
+        parsed,
+        gachaData,
+        sourceFile,
+        restored: false
+      });
+
+      console.group(
+        "🐉 Noir Live Event Import"
+      );
+
+      console.log(
+        "Source file:",
+        sourceFile
+      );
+
+      console.log(
+        "Parsed event:",
+        parsed
+      );
+
+      console.log(
+        "Parsed gacha history:",
+        gachaData
+      );
+
       console.groupEnd();
     } catch (error) {
       console.error(
-        "Live event import failed:",
+        "[Chest Companion] Live event import failed:",
         error
       );
 
-      window.currentEventData = null;
+      window.currentEventData =
+        null;
 
-      setBadge("Failed", "failed");
+      window.currentGachaData =
+        null;
+
+      setBadge(
+        "Failed",
+        "failed"
+      );
 
       statusText.textContent =
         error instanceof Error
@@ -405,116 +841,167 @@ try {
         </div>
       `;
 
-      results.classList.remove("hidden");
+      results.classList.remove(
+        "hidden"
+      );
     } finally {
-      importButton.disabled = false;
-      fileInput.disabled = false;
+      importButton.disabled =
+        false;
+
+      fileInput.disabled =
+        false;
     }
   }
-function restoreSavedLiveEvent() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem(
-        LIVE_EVENT_STORAGE_KEY
-      ) || "null"
-    );
 
-    if (
-      !saved?.data ||
-      !saved.data.chests
-    ) {
+  function restoreSavedLiveEvent() {
+    try {
+      const savedEvent =
+        JSON.parse(
+          localStorage.getItem(
+            LIVE_EVENT_STORAGE_KEY
+          ) || "null"
+        );
+
+      if (
+        !savedEvent?.data ||
+        !savedEvent.data.chests
+      ) {
+        return false;
+      }
+
+      let savedGacha = null;
+
+      try {
+        const storedGacha =
+          JSON.parse(
+            localStorage.getItem(
+              LIVE_GACHA_STORAGE_KEY
+            ) || "null"
+          );
+
+        savedGacha =
+          storedGacha?.data || null;
+      } catch (error) {
+        console.warn(
+          "[Chest Companion] Could not restore saved gacha history.",
+          error
+        );
+      }
+
+      window.currentEventData =
+        savedEvent.data;
+
+      window.currentGachaData =
+        savedGacha;
+
+      window.currentEventSourceFile =
+        savedEvent.sourceFile || null;
+
+      const sourceName =
+        savedEvent.sourceFile?.name ||
+        "saved event file";
+
+      setBadge(
+        savedEvent.data.ready
+          ? "Restored"
+          : "Incomplete",
+        savedEvent.data.ready
+          ? "ready"
+          : "failed"
+      );
+
+      const openingCount =
+        getGachaOpeningCount(
+          savedGacha
+        );
+
+      const gachaStatus =
+        savedGacha
+          ? ` ${openingCount} saved chest-opening request${
+              openingCount === 1
+                ? ""
+                : "s"
+            } restored.`
+          : "";
+
+      statusText.textContent =
+        `${savedEvent.data.readyChestCount || 0} chest deck(s) restored from ${sourceName}.${gachaStatus}`;
+
+      renderResults(
+        savedEvent.data,
+        savedGacha
+      );
+
+      updateLegacyPredictorBadges(
+        savedEvent.data
+      );
+
+      dispatchImportedEvent({
+        parsed:
+          savedEvent.data,
+
+        gachaData:
+          savedGacha,
+
+        sourceFile:
+          savedEvent.sourceFile ||
+          null,
+
+        restored: true
+      });
+
+      console.info(
+        "[Chest Companion] Saved live event and gacha history restored.",
+        {
+          eventData:
+            savedEvent.data,
+
+          gachaData:
+            savedGacha
+        }
+      );
+
+      return true;
+    } catch (error) {
+      console.warn(
+        "[Chest Companion] Could not restore saved live event.",
+        error
+      );
+
       return false;
     }
-
-    window.currentEventData =
-      saved.data;
-
-    window.currentEventSourceFile =
-      saved.sourceFile || null;
-
-    const sourceName =
-      saved.sourceFile?.name ||
-      "saved event file";
-
-    setBadge(
-      saved.data.ready
-        ? "Restored"
-        : "Incomplete",
-      saved.data.ready
-        ? "ready"
-        : "failed"
-    );
-
-    statusText.textContent =
-      `${saved.data.readyChestCount} chest deck(s) ` +
-      `restored from ${sourceName}.`;
-
-    renderResults(
-      saved.data
-    );
-
-    updateLegacyPredictorBadges(
-      saved.data
-    );
-
-    const detail = {
-      restored: true,
-      parsed: saved.data,
-      eventData: saved.data,
-      file: saved.sourceFile || null,
-      sourceFile: saved.sourceFile || null
-    };
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "noir:event-imported",
-        { detail }
-      )
-    );
-
-    document.dispatchEvent(
-      new CustomEvent(
-        "noir:event-imported",
-        { detail }
-      )
-    );
-
-    console.info(
-      "[Chest Companion] Saved live event restored.",
-      saved.data
-    );
-
-    return true;
-  } catch (error) {
-    console.warn(
-      "[Chest Companion] Could not restore saved live event.",
-      error
-    );
-
-    return false;
   }
-}
 
-restoreSavedLiveEvent();
+  restoreSavedLiveEvent();
+
   importButton.addEventListener(
     "click",
     importEventFile
   );
 
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
+  fileInput.addEventListener(
+    "change",
+    () => {
+      const file =
+        fileInput.files?.[0];
 
-    if (!file) {
-      setBadge("Not imported");
+      if (!file) {
+        setBadge(
+          "Not imported"
+        );
+
+        statusText.textContent =
+          "No live event data imported.";
+
+        return;
+      }
+
+      setBadge(
+        "File selected"
+      );
+
       statusText.textContent =
-        "No live event data imported.";
-
-      return;
+        `${file.name} is ready to import.`;
     }
-
-    setBadge("File selected");
-
-    statusText.textContent =
-      `${file.name} is ready to import.`;
-  });
+  );
 });

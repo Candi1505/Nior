@@ -1573,10 +1573,11 @@
       );
 
     const normalisedReward =
-      normaliseDeckEntry(
-        reward,
-        0
-      );
+  normaliseDeckEntry(
+    reward,
+    0,
+    normalisedChest
+  );
 
     return {
       number:

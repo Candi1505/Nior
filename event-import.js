@@ -409,8 +409,7 @@ function restoreSavedLiveEvent() {
     );
 
     if (
-      !saved ||
-      !saved.data ||
+      !saved?.data ||
       !saved.data.chests
     ) {
       return false;
@@ -420,32 +419,58 @@ function restoreSavedLiveEvent() {
       saved.data;
 
     window.currentEventSourceFile =
-      saved.sourceFile || "";
+      saved.sourceFile || null;
 
-    setBadge("Restored", "ready");
+    const sourceName =
+      saved.sourceFile?.name ||
+      "saved event file";
+
+    setBadge(
+      saved.data.ready
+        ? "Restored"
+        : "Incomplete",
+      saved.data.ready
+        ? "ready"
+        : "failed"
+    );
 
     statusText.textContent =
-      saved.sourceFile
-        ? `${saved.sourceFile} restored automatically.`
-        : "Saved live event data restored automatically.";
+      `${saved.data.readyChestCount} chest deck(s) ` +
+      `restored from ${sourceName}.`;
+
+    renderResults(
+      saved.data
+    );
+
+    updateLegacyPredictorBadges(
+      saved.data
+    );
+
+    const detail = {
+      restored: true,
+      parsed: saved.data,
+      eventData: saved.data,
+      file: saved.sourceFile || null,
+      sourceFile: saved.sourceFile || null
+    };
 
     window.dispatchEvent(
       new CustomEvent(
         "noir:event-imported",
-        {
-          detail: {
-            restored: true,
-            sourceFile:
-              saved.sourceFile || "",
-            eventData:
-              saved.data
-          }
-        }
+        { detail }
+      )
+    );
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "noir:event-imported",
+        { detail }
       )
     );
 
     console.info(
-      "[Chest Companion] Saved live event restored."
+      "[Chest Companion] Saved live event restored.",
+      saved.data
     );
 
     return true;

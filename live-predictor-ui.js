@@ -2,9 +2,6 @@
    CHEST COMPANION BETA
    LIVE PREDICTOR UI
 
-   Opens the new live-event predictor and prevents the legacy
-   spreadsheet predictor from opening.
-
    Must load after:
    - event-parser.js
    - event-import.js
@@ -38,10 +35,6 @@
     freedom: "🦅"
   };
 
-  /* ----------------------------------------------------------
-     HELPERS
-     ---------------------------------------------------------- */
-
   function escapeHTML(value) {
     return String(value ?? "").replace(
       /[&<>"']/g,
@@ -60,11 +53,33 @@
     const number =
       Number(value);
 
-    if (!Number.isFinite(number)) {
-      return "—";
+    return Number.isFinite(number)
+      ? number.toLocaleString()
+      : "—";
+  }
+
+  function getSourceName(sourceFile) {
+    if (!sourceFile) {
+      return "";
     }
 
-    return number.toLocaleString();
+    if (
+      typeof sourceFile === "string"
+    ) {
+      return sourceFile;
+    }
+
+    if (
+      typeof sourceFile === "object"
+    ) {
+      return (
+        sourceFile.name ||
+        sourceFile.fileName ||
+        "Imported about_v2 file"
+      );
+    }
+
+    return "";
   }
 
   function closeLegacyPredictor() {
@@ -79,10 +94,6 @@
       );
     }
   }
-
-  /* ----------------------------------------------------------
-     STYLES
-     ---------------------------------------------------------- */
 
   function addStyles() {
     if (
@@ -514,10 +525,6 @@
     );
   }
 
-  /* ----------------------------------------------------------
-     UI CREATION
-     ---------------------------------------------------------- */
-
   function createOverlay() {
     if (
       document.getElementById(
@@ -640,13 +647,7 @@
     );
   }
 
-  /* ----------------------------------------------------------
-     RENDERING
-     ---------------------------------------------------------- */
-
-  function renderChestCards(
-    status
-  ) {
+  function renderChestCards(status) {
     const container =
       document.getElementById(
         "lpChestGrid"
@@ -719,28 +720,9 @@
           `;
         })
         .join("");
-
-    container
-      .querySelectorAll(
-        "[data-lp-chest]"
-      )
-      .forEach(button => {
-        button.addEventListener(
-          "click",
-          () => {
-            Engine.setActiveChest(
-              button.dataset.lpChest
-            );
-
-            render();
-          }
-        );
-      });
   }
 
-  function renderSelectedChest(
-    status
-  ) {
+  function renderSelectedChest(status) {
     const selected =
       status.chests.find(
         chest =>
@@ -875,20 +857,26 @@
         ? "lp-status lp-status-ready"
         : "lp-status lp-status-not-ready";
 
+    const sourceName =
+      getSourceName(
+        status.sourceFile
+      );
+
     document.getElementById(
       "lpSource"
     ).textContent =
-      status.sourceFile
-        ? `Source: ${status.sourceFile}`
+      sourceName
+        ? `Source: ${sourceName}`
         : "";
 
-    renderChestCards(status);
-    renderSelectedChest(status);
-  }
+    renderChestCards(
+      status
+    );
 
-  /* ----------------------------------------------------------
-     OPEN AND CLOSE
-     ---------------------------------------------------------- */
+    renderSelectedChest(
+      status
+    );
+  }
 
   function open(
     chestType = null
@@ -932,10 +920,6 @@
     document.body.style.overflow =
       "";
   }
-
-  /* ----------------------------------------------------------
-     LEGACY BUTTON TAKEOVER
-     ---------------------------------------------------------- */
 
   function detectChestType(
     element
@@ -1012,40 +996,6 @@
       return;
     }
 
-    if (
-      target.closest(
-        "#predictorView"
-      ) &&
-      target.id !==
-        "ccPredictorLauncher"
-    ) {
-      /*
-       * Leave the event-import and workbook-management
-       * controls alone.
-       */
-      const description = [
-        target.id,
-        target.textContent,
-        target.className
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      const launchesPredictor =
-        description.includes(
-          "engine ready"
-        ) ||
-        description.includes(
-          "open predictor"
-        ) ||
-        description.trim() ===
-          "predictor";
-
-      if (!launchesPredictor) {
-        return;
-      }
-    }
-
     const description = [
       target.id,
       target.textContent,
@@ -1081,11 +1031,37 @@
     );
   }
 
-  /* ----------------------------------------------------------
-     EVENTS
-     ---------------------------------------------------------- */
-
   function attachEvents() {
+    document
+      .getElementById(
+        "lpChestGrid"
+      )
+      .addEventListener(
+        "click",
+        event => {
+          const button =
+            event.target.closest(
+              "[data-lp-chest]"
+            );
+
+          if (!button) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          const chestType =
+            button.dataset.lpChest;
+
+          Engine.setActiveChest(
+            chestType
+          );
+
+          render();
+        }
+      );
+
     document
       .getElementById(
         "lpClose"
@@ -1178,10 +1154,6 @@
       }
     );
   }
-
-  /* ----------------------------------------------------------
-     STARTUP
-     ---------------------------------------------------------- */
 
   function initialise() {
     addStyles();

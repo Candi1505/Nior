@@ -5,7 +5,7 @@
  * Live about_v2 event importer
  *
  * Responsibilities:
- * - Read an uploaded .json or .txt file
+ * - Read an uploaded .json, .txt or .har file
  * - Parse the War Dragons about_v2 response
  * - Detect Gold, Platinum, Draconic and Freedom decks
  * - Display developer diagnostics

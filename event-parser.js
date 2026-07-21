@@ -446,8 +446,11 @@ class EventParser {
       availableIndexKeys:
         Object.keys(params.deck_indices),
 
-      availableSpinTypeCount:
-        this.getSpinTypes().length
+      spinTypes:
+  this.getSpinTypes(),
+
+availableSpinTypeCount:
+  this.getSpinTypes().length
     };
 
     result.readyChestCount =

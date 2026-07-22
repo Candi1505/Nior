@@ -1971,19 +1971,105 @@ function resolveDeckReward(
     }
   }
 
-  function valuesMatch(
-    first,
-    second
+  function createRewardMatchKey(
+  value
+) {
+  const resolved =
+    getMatchValue(
+      value
+    );
+
+  if (!isObject(resolved)) {
+    return serialiseValue(
+      resolved
+    );
+  }
+
+  const code =
+    normaliseText(
+      firstDefined([
+        resolved.code,
+        resolved.rewardCode,
+        resolved.reward_code,
+        resolved.id,
+        resolved.rewardId,
+        resolved.reward_id,
+        resolved.itemId,
+        resolved.item_id
+      ], "")
+    ).toLowerCase();
+
+  const name =
+    normaliseText(
+      firstDefined([
+        resolved.name,
+        resolved.label,
+        resolved.displayName,
+        resolved.display_name,
+        resolved.rewardName,
+        resolved.reward_name
+      ], "")
+    ).toLowerCase();
+
+  const amount =
+    toFiniteNumber(
+      firstDefined([
+        resolved.amount,
+        resolved.quantity,
+        resolved.qty,
+        resolved.count,
+        resolved.mu
+      ]),
+      null
+    );
+
+  if (code) {
+    return [
+      "code",
+      code,
+      amount ?? ""
+    ].join("::");
+  }
+
+  if (name) {
+    return [
+      "name",
+      name,
+      amount ?? ""
+    ].join("::");
+  }
+
+  if (
+    Array.isArray(
+      resolved.bundle
+    )
   ) {
     return (
-      serialiseValue(
-        getMatchValue(first)
-      ) ===
-      serialiseValue(
-        getMatchValue(second)
+      "bundle::" +
+      JSON.stringify(
+        resolved.bundle
       )
     );
   }
+
+  return serialiseValue(
+    resolved
+  );
+}
+
+function valuesMatch(
+  first,
+  second
+) {
+  return (
+    createRewardMatchKey(
+      first
+    ) ===
+    createRewardMatchKey(
+      second
+    )
+  );
+}
 
   function formatDeckValue(value) {
     if (value === undefined) {
@@ -3787,6 +3873,7 @@ function importGachaHistory(
       hasChestDeck,
 
       serialiseValue,
+      createRewardMatchKey,
       valuesMatch,
       formatDeckValue,
       getUniqueDeckValues,

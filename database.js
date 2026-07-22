@@ -7,6 +7,116 @@
 
 window.ChestDatabase = {
 
+  isAdminProfile(profile) {
+    return Boolean(
+      profile &&
+      (
+        profile.is_admin === true ||
+        String(profile.role || "")
+          .toLowerCase() === "admin"
+      )
+    );
+  },
+
+  async getCurrentAccess() {
+    const supabaseClient =
+      window.chestSupabase;
+
+    if (!supabaseClient) {
+      throw new Error(
+        "Supabase is not connected."
+      );
+    }
+
+    const { data, error } =
+      await supabaseClient.auth
+        .getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    const user =
+      data.session?.user || null;
+
+    if (!user) {
+      return {
+        user: null,
+        profile: null,
+        isAdmin: false
+      };
+    }
+
+    const {
+      data: profile,
+      error: profileError
+    } = await supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    return {
+      user,
+      profile,
+      isAdmin:
+        this.isAdminProfile(profile)
+    };
+  },
+
+  async signInAdmin(email, password) {
+    const supabaseClient =
+      window.chestSupabase;
+
+    const {
+      data,
+      error
+    } = await supabaseClient.auth
+      .signInWithPassword({
+        email: String(email || "").trim(),
+        password: String(password || "")
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.user) {
+      await this.getOrCreateProfile(
+        data.user
+      );
+    }
+
+    const access =
+      await this.getCurrentAccess();
+
+    if (!access.isAdmin) {
+      await supabaseClient.auth.signOut();
+
+      throw new Error(
+        "This account does not have Noir administrator access."
+      );
+    }
+
+    return access;
+  },
+
+  async signOutAdmin() {
+    const { error } =
+      await window.chestSupabase.auth
+        .signOut();
+
+    if (error) {
+      throw error;
+    }
+
+    return true;
+  },
+
   /*
     Gets the current Supabase session.
 
@@ -99,7 +209,7 @@ window.ChestDatabase = {
       await supabaseClient
         .from("profiles")
         .select("*")
-        .eq("id", user.id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
 
@@ -118,7 +228,7 @@ window.ChestDatabase = {
           last_active_at:
             new Date().toISOString()
         })
-        .eq("id", user.id);
+        .eq("user_id", user.id);
 
 
       return existingProfile;
@@ -128,7 +238,7 @@ window.ChestDatabase = {
 
     const newProfile = {
 
-      id: user.id,
+      user_id: user.id,
 
       nickname: "Tester",
 
@@ -255,7 +365,7 @@ window.ChestDatabase = {
       await supabaseClient
         .from("profiles")
         .update(profileUpdate)
-        .eq("id", userId)
+        .eq("user_id", userId)
         .select()
         .single();
 
@@ -425,6 +535,106 @@ async getActivePredictors() {
   }
 
   return data || [];
+},
+
+async publishLiveEvent(
+  eventData,
+  sourceFile = null
+) {
+  const access =
+    await this.getCurrentAccess();
+
+  if (!access.isAdmin) {
+    throw new Error(
+      "Administrator access is required to publish event data."
+    );
+  }
+
+  if (
+    !eventData?.chests ||
+    typeof eventData.chests !== "object"
+  ) {
+    throw new Error(
+      "The imported HAR did not contain usable chest decks."
+    );
+  }
+
+  const publishedAt =
+    new Date().toISOString();
+
+  const version =
+    Math.floor(Date.now() / 1000);
+
+  const safeSource = sourceFile
+    ? {
+        name: sourceFile.name || "Proxyman HAR",
+        importedAt:
+          sourceFile.importedAt ||
+          publishedAt
+      }
+    : null;
+
+  const sanitisedEvent = {
+    schema: "noir-live-event-v1",
+    event: eventData.event || "Current event",
+    importedAt:
+      eventData.importedAt ||
+      publishedAt,
+    publishedAt,
+    ready: Boolean(eventData.ready),
+    readyChestCount:
+      Number(eventData.readyChestCount) || 0,
+    chests: eventData.chests,
+    decks: eventData.decks || {},
+    drops: eventData.drops || {},
+    deckIndices:
+      eventData.deckIndices || {},
+    spinTypes:
+      eventData.spinTypes || [],
+    sourceFile: safeSource
+  };
+
+  const chestTypes = [
+    "gold",
+    "platinum",
+    "draconic",
+    "freedom"
+  ].filter(
+    chestType =>
+      sanitisedEvent.chests[
+        chestType
+      ]?.found
+  );
+
+  if (!chestTypes.length) {
+    throw new Error(
+      "No supported chest decks were found to publish."
+    );
+  }
+
+  const records = [];
+
+  for (const chestType of chestTypes) {
+    records.push(
+      await this.savePredictor({
+        chestType,
+        version,
+        predictorData: {
+          schema: "noir-live-event-v1",
+          chestType,
+          eventData: sanitisedEvent
+        },
+        uploadedBy: access.user.id
+      })
+    );
+  }
+
+  return {
+    eventData: sanitisedEvent,
+    records,
+    version,
+    publishedAt
+  };
 },
 
 };

@@ -3786,12 +3786,6 @@
 
             const details = [];
 
-            if (reward.code) {
-              details.push(
-                `Code: ${reward.code}`
-              );
-            }
-
             if (
               reward.amount !== null
             ) {
@@ -4347,12 +4341,6 @@
               );
 
             const meta = [];
-
-            if (prediction.code) {
-              meta.push(
-                `Code: ${prediction.code}`
-              );
-            }
 
             meta.push(
               prediction.isBonus

@@ -3635,6 +3635,71 @@ function valuesMatch(
           )
         : {};
 
+    function takeDeterministicPoolReward(poolKey) {
+      const poolDeck =
+        getResolvedPoolDeck(
+          poolKey,
+          normalised
+        );
+      const knownCursor =
+        nestedPoolCursors[poolKey];
+      const cursorOptions =
+        Array.isArray(
+          nestedPoolCursorOptions[poolKey]
+        )
+          ? nestedPoolCursorOptions[poolKey]
+          : (
+              Number.isInteger(knownCursor)
+                ? [knownCursor]
+                : []
+            );
+
+      if (
+        !poolKey ||
+        !poolDeck.length ||
+        !cursorOptions.length
+      ) {
+        return null;
+      }
+
+      const possibleRewards =
+        cursorOptions.map(
+          cursor => poolDeck[cursor]
+        );
+      const rewardKeys =
+        new Set(
+          possibleRewards.map(
+            possibleReward =>
+              createRewardMatchKey(
+                possibleReward.matchValue
+              )
+          )
+        );
+
+      if (rewardKeys.size !== 1) {
+        return null;
+      }
+
+      nestedPoolCursorOptions[poolKey] =
+        Array.from(
+          new Set(
+            cursorOptions.map(
+              cursor =>
+                (cursor + 1) % poolDeck.length
+            )
+          )
+        );
+
+      if (
+        nestedPoolCursorOptions[poolKey].length === 1
+      ) {
+        nestedPoolCursors[poolKey] =
+          nestedPoolCursorOptions[poolKey][0];
+      }
+
+      return possibleRewards[0];
+    }
+
     const bonusEvery = {
       gold: 30,
       platinum: 30,
@@ -3644,6 +3709,18 @@ function valuesMatch(
 
     const recordedHistory =
       getObservations(normalised);
+    const predictedBonusDeck =
+      nestedState?.bonusDeckKey
+        ? getNamedDeck(
+            nestedState.bonusDeckKey
+          )
+        : [];
+    const directBonusPoolKey =
+      CHEST_DIRECT_BONUS_POOL_KEYS[
+        normalised
+      ] || "";
+    let predictedBonusCount =
+      nestedState?.bonusCount || 0;
 
     let lastBonusIndex = -1;
 
@@ -3707,69 +3784,16 @@ function valuesMatch(
             nestedState.mainDeckKey,
             deckValue
           );
-        const poolDeck =
-          getResolvedPoolDeck(
-            poolKey,
-            normalised
-          );
-        const knownCursor =
-          nestedPoolCursors[poolKey];
-        const cursorOptions =
-          Array.isArray(
-            nestedPoolCursorOptions[poolKey]
-          )
-            ? nestedPoolCursorOptions[poolKey]
-            : (
-                Number.isInteger(knownCursor)
-                  ? [knownCursor]
-                  : []
-              );
-
-        if (
-          !poolKey ||
-          !poolDeck.length ||
-          !cursorOptions.length
-        ) {
-          break;
-        }
-
-        const possibleRewards =
-          cursorOptions.map(
-            cursor => poolDeck[cursor]
-          );
-        const rewardKeys =
-          new Set(
-            possibleRewards.map(
-              possibleReward =>
-                createRewardMatchKey(
-                  possibleReward.matchValue
-                )
-            )
+        reward =
+          takeDeterministicPoolReward(
+            poolKey
           );
 
         // A unique main position can be known before every nested rarity
         // cursor is unique. Publish the deterministic prefix shared by all
         // remaining cursor possibilities, then stop at the first divergence.
-        if (rewardKeys.size !== 1) {
+        if (!reward) {
           break;
-        }
-
-        reward = possibleRewards[0];
-        nestedPoolCursorOptions[poolKey] =
-          Array.from(
-            new Set(
-              cursorOptions.map(
-                cursor =>
-                  (cursor + 1) % poolDeck.length
-              )
-            )
-          );
-
-        if (
-          nestedPoolCursorOptions[poolKey].length === 1
-        ) {
-          nestedPoolCursors[poolKey] =
-            nestedPoolCursorOptions[poolKey][0];
         }
       } else {
         index =
@@ -3845,21 +3869,90 @@ function valuesMatch(
         if (regularSinceBonus === bonusEvery) {
           const chestLabel =
             getChestLabel(normalised);
+          let bonusReward = null;
+
+          if (
+            nestedState &&
+            predictedBonusDeck.length &&
+            Number.isInteger(
+              nestedState.bonusStart
+            )
+          ) {
+            const bonusIndex =
+              (
+                nestedState.bonusStart +
+                predictedBonusCount
+              ) % predictedBonusDeck.length;
+            const bonusDeckValue =
+              predictedBonusDeck[bonusIndex];
+            const bonusPoolKey =
+              getNestedPoolKey(
+                nestedState.bonusDeckKey,
+                bonusDeckValue
+              );
+
+            bonusReward =
+              takeDeterministicPoolReward(
+                bonusPoolKey
+              );
+          } else if (
+            nestedState &&
+            directBonusPoolKey
+          ) {
+            bonusReward =
+              takeDeterministicPoolReward(
+                directBonusPoolKey
+              );
+          }
+
+          const bonusDisplayName =
+            bonusReward
+              ? getRewardDisplayName(
+                  bonusReward,
+                  upcoming.length
+                )
+              : `${chestLabel} Bonus Chest`;
 
           upcoming.push({
             number: upcoming.length + 1,
             index: null,
             position: null,
-            name: `${chestLabel} Bonus Chest`,
-            label: `${chestLabel} Bonus Chest`,
-            code: `${normalised}_bonus`,
-            amount: null,
+            name:
+              bonusReward
+                ? `${bonusDisplayName} (Bonus Chest)`
+                : bonusDisplayName,
+            label:
+              bonusReward
+                ? `${bonusDisplayName} (Bonus Chest)`
+                : bonusDisplayName,
+            code:
+              bonusReward?.code ||
+              `${normalised}_bonus`,
+            amount:
+              bonusReward?.amount ?? null,
+            value:
+              cloneValue(
+                bonusReward?.matchValue || null
+              ),
+            matchValue:
+              cloneValue(
+                bonusReward?.matchValue || null
+              ),
             isBonus: true,
+            bonusPredicted:
+              Boolean(bonusReward),
             bonusEvery,
             bonusAfterRegularChest: offset,
-            displayValue: `${chestLabel} Bonus Chest`
+            displayValue:
+              bonusReward
+                ? (
+                    `${bonusDisplayName} — ` +
+                    `${bonusReward.amount}`
+                  )
+                : bonusDisplayName
           });
 
+          predictedBonusCount += 1;
           regularSinceBonus = 0;
         }
       }

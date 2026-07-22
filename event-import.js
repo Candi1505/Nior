@@ -1,1007 +1,298 @@
-"use strict";
-
-/*
- * Noir Chest Companion
- * Live event and HAR chest-history importer
- *
- * Responsibilities:
- * - Read an uploaded .json, .txt or .har file
- * - Parse the War Dragons about_v2 response
- * - Detect Gold, Platinum, Draconic and Freedom decks
- * - Parse use_gacha requests when the file is a HAR capture
- * - Store event information and chest-opening history
- * - Restore imported information after the app reloads
- * - Notify the rest of Noir when new data becomes available
- */
-
-const LIVE_EVENT_STORAGE_KEY =
-  "chestCompanionLiveEventData";
-
-const LIVE_GACHA_STORAGE_KEY =
-  "chestCompanionLiveGachaData";
-
-document.addEventListener("DOMContentLoaded", () => {
-  const importButton =
-    document.getElementById("importEventDataButton");
-
-  const fileInput =
-    document.getElementById("eventDataFile");
-
-  const statusText =
-    document.getElementById("eventImportStatus");
-
-  const badge =
-    document.getElementById("eventImportBadge");
-
-  const results =
-    document.getElementById("eventImportResults");
-
-  if (
-    !importButton ||
-    !fileInput ||
-    !statusText ||
-    !badge ||
-    !results
-  ) {
-    console.warn(
-      "[Chest Companion] Live event importer could not initialise because one or more interface elements are missing."
-    );
-
-    return;
-  }
-
-  function setBadge(text, state = "") {
-    badge.textContent = text;
-
-    badge.classList.remove(
-      "ready",
-      "failed",
-      "loading"
-    );
-
-    if (state) {
-      badge.classList.add(state);
-    }
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function formatValue(value) {
-    if (
-      value === undefined ||
-      value === null ||
-      value === ""
-    ) {
-      return "—";
-    }
-
-    if (typeof value === "object") {
-      try {
-        return escapeHtml(
-          JSON.stringify(value)
-        );
-      } catch (error) {
-        return "[Object]";
-      }
-    }
-
-    return escapeHtml(value);
-  }
-
-  function createChestRow(chest) {
-    const warnings = Array.isArray(
-      chest?.warnings
-    )
-      ? chest.warnings
-      : [];
-
-    const warningText = warnings.length
-      ? `
-        <details class="developer-warning">
-          <summary>
-            ${warnings.length}
-            warning${warnings.length === 1 ? "" : "s"}
-          </summary>
-
-          <ul>
-            ${warnings
-              .map(
-                warning => `
-                  <li>
-                    ${escapeHtml(warning)}
-                  </li>
-                `
-              )
-              .join("")}
-          </ul>
-        </details>
-      `
-      : "";
-
-    return `
-      <tr>
-        <td>
-          <strong>
-            ${escapeHtml(chest?.label)}
-          </strong>
-
-          <small>
-            ${escapeHtml(chest?.key)}
-          </small>
-        </td>
-
-        <td>
-          ${chest?.found ? "✅" : "❌"}
-        </td>
-
-        <td>
-          ${formatValue(chest?.index)}
-        </td>
-
-        <td>
-          ${formatValue(chest?.deckLength)}
-        </td>
-
-        <td>
-          ${formatValue(chest?.currentValue)}
-        </td>
-      </tr>
-
-      ${
-        warningText
-          ? `
-            <tr>
-              <td colspan="5">
-                ${warningText}
-              </td>
-            </tr>
-          `
-          : ""
-      }
-    `;
-  }
-
-  function getGachaOpeningCount(gachaData) {
-    if (!gachaData) {
-      return 0;
-    }
-
-    const possibleArrays = [
-      gachaData.openings,
-      gachaData.history,
-      gachaData.rewardHistory,
-      gachaData.entries,
-      gachaData.requests,
-      gachaData.results
-    ];
-
-    const matchingArray =
-      possibleArrays.find(Array.isArray);
-
-    if (matchingArray) {
-      return matchingArray.length;
-    }
-
-    const possibleCounts = [
-      gachaData.openingCount,
-      gachaData.requestCount,
-      gachaData.historyCount,
-      gachaData.totalOpenings,
-      gachaData.totalRequests,
-      gachaData.processedEntryCount
-    ];
-
-    const matchingCount =
-      possibleCounts.find(
-        value =>
-          Number.isFinite(Number(value))
-      );
-
-    return matchingCount === undefined
-      ? 0
-      : Number(matchingCount);
-  }
-
-  function getGachaBonusCount(gachaData) {
-    if (!gachaData) {
-      return 0;
-    }
-
-    const possibleArrays = [
-      gachaData.bonusClaims,
-      gachaData.bonuses
-    ];
-
-    const matchingArray =
-      possibleArrays.find(Array.isArray);
-
-    if (matchingArray) {
-      return matchingArray.length;
-    }
-
-    const history =
-      gachaData.openings ||
-      gachaData.history ||
-      gachaData.rewardHistory ||
-      gachaData.entries ||
-      [];
-
-    if (!Array.isArray(history)) {
-      return 0;
-    }
-
-    return history.filter(entry =>
-      Boolean(
-        entry?.bonus ||
-        entry?.isBonus ||
-        entry?.bonusClaim ||
-        entry?.claimType === "bonus" ||
-        entry?.claimOptionsType ===
-          "claim_Bonus"
-      )
-    ).length;
-  }
-
-  function renderResults(
-    parsed,
-    gachaData = null
-  ) {
-    const chests =
-      parsed?.chests &&
-      typeof parsed.chests === "object"
-        ? parsed.chests
-        : {};
-
-    const chestRows = Object.values(chests)
-      .map(createChestRow)
-      .join("");
-
-    const readyText = parsed?.ready
-      ? `${parsed.readyChestCount || 0} chest deck(s) ready`
-      : "No supported chest decks were detected";
-
-    const gachaOpeningCount =
-      getGachaOpeningCount(gachaData);
-
-    const gachaBonusCount =
-      getGachaBonusCount(gachaData);
-
-    const gachaSummary = gachaData
-      ? `
-        <div class="developer-summary">
-
-          <p class="eyebrow">
-            HAR CHEST HISTORY
-          </p>
-
-          <h3>
-            ${gachaOpeningCount}
-            opening request${gachaOpeningCount === 1 ? "" : "s"}
-          </h3>
-
-          <p class="muted-text">
-            ${gachaBonusCount}
-            bonus claim${gachaBonusCount === 1 ? "" : "s"}
-            detected.
-          </p>
-
-        </div>
-      `
-      : `
-        <div class="developer-summary">
-
-          <p class="eyebrow">
-            CHEST HISTORY
-          </p>
-
-          <h3>
-            No use_gacha history detected
-          </h3>
-
-          <p class="muted-text">
-            Event data was imported successfully, but this
-            file did not contain HAR chest-opening requests.
-          </p>
-
-        </div>
-      `;
-
-    const availableDeckKeys =
-      Array.isArray(parsed?.availableDeckKeys)
-        ? parsed.availableDeckKeys
-        : [];
-
-    const availableIndexKeys =
-      Array.isArray(parsed?.availableIndexKeys)
-        ? parsed.availableIndexKeys
-        : [];
-
-    results.innerHTML = `
-      <div class="developer-summary">
-
-        <p class="eyebrow">
-          IMPORTED EVENT
-        </p>
-
-        <h3>
-          ${escapeHtml(
-            parsed?.event || "Unknown event"
-          )}
-        </h3>
-
-        <p class="muted-text">
-          ${escapeHtml(readyText)}
-        </p>
-
-      </div>
-
-      ${gachaSummary}
-
-      <div class="developer-table-wrapper">
-
-        <table class="developer-table">
-
-          <thead>
-            <tr>
-              <th>Chest</th>
-              <th>Found</th>
-              <th>Index</th>
-              <th>Length</th>
-              <th>Current</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${
-              chestRows ||
-              `
-                <tr>
-                  <td colspan="5">
-                    No supported chest information was found.
-                  </td>
-                </tr>
-              `
-            }
-          </tbody>
-
-        </table>
-
-      </div>
-
-      <details class="developer-details">
-
-        <summary>
-          Available deck keys
-        </summary>
-
-        <div class="developer-key-list">
-          ${
-            availableDeckKeys.length
-              ? availableDeckKeys
-                  .map(
-                    key => `
-                      <code>
-                        ${escapeHtml(key)}
-                      </code>
-                    `
-                  )
-                  .join("")
-              : `
-                <span class="muted-text">
-                  No deck keys found.
-                </span>
-              `
-          }
-        </div>
-
-      </details>
-
-      <details class="developer-details">
-
-        <summary>
-          Available deck index keys
-        </summary>
-
-        <div class="developer-key-list">
-          ${
-            availableIndexKeys.length
-              ? availableIndexKeys
-                  .map(
-                    key => `
-                      <code>
-                        ${escapeHtml(key)}
-                      </code>
-                    `
-                  )
-                  .join("")
-              : `
-                <span class="muted-text">
-                  No deck index keys found.
-                </span>
-              `
-          }
-        </div>
-
-      </details>
-    `;
-
-    results.classList.remove("hidden");
-  }
-
-  function updateLegacyPredictorBadges(parsed) {
-    const badgeMap = {
-      gold:
-        document.getElementById(
-          "goldPredictorBadge"
-        ),
-
-      platinum:
-        document.getElementById(
-          "platinumPredictorBadge"
-        ),
-
-      draconic:
-        document.getElementById(
-          "draconicPredictorBadge"
-        ),
-
-      freedom:
-        document.getElementById(
-          "freedomPredictorBadge"
-        )
-    };
-
-    Object.entries(badgeMap).forEach(
-      ([chestType, chestBadge]) => {
-        if (!chestBadge) {
-          return;
-        }
-
-        const chest =
-          parsed?.chests?.[chestType];
-
-        chestBadge.textContent =
-          chest?.found
-            ? "Live data ready"
-            : "Not detected";
-      }
+/* ============================================================
+   NOIR — ADMIN EVENT PUBLISHER
+
+   Only an authenticated profile with role=admin or
+   is_admin=true may publish. The raw HAR and personal gacha
+   history remain on the administrator's device. Only the
+   sanitised event/deck data is written to Supabase.
+   ============================================================ */
+
+(function initialiseAdminEventPublisher(window) {
+  "use strict";
+
+  const get = id =>
+    document.getElementById(id);
+
+  let access = {
+    user: null,
+    profile: null,
+    isAdmin: false
+  };
+
+  function setStatus(message, failed = false) {
+    const status = get("adminAccessStatus");
+
+    if (!status) return;
+
+    status.textContent = message;
+    status.classList.toggle(
+      "error-text",
+      failed
     );
   }
 
-  function parseHarGachaData(rawText) {
-    if (
-      !window.HarGachaParser ||
-      typeof window.HarGachaParser.parse !==
-        "function"
-    ) {
-      console.warn(
-        "[Chest Companion] HarGachaParser is unavailable. Confirm har-gacha-parser.js loads before event-import.js."
+  function renderAccess() {
+    const loginPanel =
+      get("adminLoginPanel");
+    const signedInPanel =
+      get("adminSignedInPanel");
+    const controls =
+      get("adminHarControls");
+    const importButton =
+      get("importEventDataButton");
+
+    loginPanel?.classList.toggle(
+      "hidden",
+      access.isAdmin
+    );
+    signedInPanel?.classList.toggle(
+      "hidden",
+      !access.isAdmin
+    );
+    controls?.classList.toggle(
+      "hidden",
+      !access.isAdmin
+    );
+
+    if (importButton) {
+      importButton.disabled =
+        !access.isAdmin;
+    }
+
+    if (access.isAdmin) {
+      setStatus(
+        `Administrator access confirmed${
+          access.user?.email
+            ? ` for ${access.user.email}`
+            : ""
+        }.`
       );
-
-      return null;
-    }
-
-    let possibleHar;
-
-    try {
-      possibleHar = JSON.parse(rawText);
-    } catch (error) {
-      return null;
-    }
-
-    const entries =
-      possibleHar?.log?.entries;
-
-    if (!Array.isArray(entries)) {
-      return null;
-    }
-
-    const hasGachaRequests =
-      entries.some(entry => {
-        const url = String(
-          entry?.request?.url || ""
-        );
-
-        return url.includes(
-          "/ext/dragonsong/event/use_gacha"
-        );
-      });
-
-    if (!hasGachaRequests) {
-      return null;
-    }
-
-    try {
-      return window.HarGachaParser.parse(
-        possibleHar
-      );
-    } catch (objectError) {
-      /*
-       * Some parser versions may expect the original
-       * JSON text instead of the already-parsed object.
-       */
-      try {
-        return window.HarGachaParser.parse(
-          rawText
-        );
-      } catch (textError) {
-        console.warn(
-          "[Chest Companion] HAR gacha requests were found, but they could not be parsed.",
-          textError
-        );
-
-        return null;
-      }
     }
   }
 
-  function saveImportedData(
-    parsed,
-    gachaData,
-    sourceFile
-  ) {
+  async function refreshAccess() {
     try {
-      localStorage.setItem(
-        LIVE_EVENT_STORAGE_KEY,
-        JSON.stringify({
-          data: parsed,
-          sourceFile
-        })
-      );
+      access =
+        await window.ChestDatabase
+          .getCurrentAccess();
     } catch (error) {
       console.warn(
-        "[Chest Companion] Could not save live event data.",
+        "[Noir] Could not check administrator access.",
         error
       );
+
+      access = {
+        user: null,
+        profile: null,
+        isAdmin: false
+      };
     }
 
-    if (gachaData) {
-      try {
-        localStorage.setItem(
-          LIVE_GACHA_STORAGE_KEY,
-          JSON.stringify({
-            data: gachaData,
-            sourceFile
-          })
-        );
-      } catch (error) {
-        console.warn(
-          "[Chest Companion] Could not save HAR gacha history.",
-          error
-        );
-      }
-
-      return;
-    }
-
-    /*
-     * Remove history from an older import so it cannot
-     * become mixed with the newly imported event.
-     */
-    try {
-      localStorage.removeItem(
-        LIVE_GACHA_STORAGE_KEY
-      );
-    } catch (error) {
-      console.warn(
-        "[Chest Companion] Could not clear old HAR gacha history.",
-        error
-      );
-    }
-  }
-
-  function dispatchImportedEvent({
-    parsed,
-    gachaData,
-    sourceFile,
-    restored = false
-  }) {
-    const detail = {
-      restored,
-      parsed,
-      eventData: parsed,
-      gachaData,
-      file: sourceFile,
-      sourceFile
-    };
-
-    document.dispatchEvent(
-      new CustomEvent(
-        "noir:event-imported",
-        { detail }
-      )
-    );
+    renderAccess();
 
     window.dispatchEvent(
       new CustomEvent(
-        "noir:event-imported",
-        { detail }
+        "noir:admin-access-changed",
+        { detail: { ...access } }
       )
     );
 
-    /*
-     * This additional event gives future predictor
-     * components a dedicated chest-history signal.
-     */
-    if (gachaData) {
-      window.dispatchEvent(
-        new CustomEvent(
-          "noir:gacha-imported",
-          {
-            detail: {
-              restored,
-              gachaData,
-              eventData: parsed,
-              sourceFile
-            }
-          }
-        )
-      );
-    }
+    return access;
   }
 
-  async function importEventFile() {
-    const file =
-      fileInput.files?.[0];
+  async function signIn() {
+    const email =
+      get("adminEmailInput")?.value;
+    const password =
+      get("adminPasswordInput")?.value;
+    const button =
+      get("adminSignInButton");
 
-    if (!file) {
-      setBadge(
-        "Choose file",
-        "failed"
+    if (!email || !password) {
+      window.alert(
+        "Enter the Noir administrator email and password."
       );
-
-      statusText.textContent =
-        "Please choose an about_v2 JSON, text or HAR file first.";
-
-      results.classList.add("hidden");
-
       return;
     }
 
-    if (
-      typeof window.EventParser !==
-      "function"
-    ) {
-      setBadge(
-        "Unavailable",
-        "failed"
-      );
-
-      statusText.textContent =
-        "The event parser did not load. Check that event-parser.js is included before event-import.js.";
-
-      console.error(
-        "[Chest Companion] EventParser is unavailable. Confirm the script order in index.html."
-      );
-
-      return;
-    }
-
-    importButton.disabled = true;
-    fileInput.disabled = true;
-
-    setBadge(
-      "Reading...",
-      "loading"
-    );
-
-    statusText.textContent =
-      `Reading ${file.name}...`;
-
-    results.classList.add("hidden");
+    button.disabled = true;
+    button.textContent = "Signing in...";
 
     try {
-      const rawText =
-        await file.text();
+      access =
+        await window.ChestDatabase
+          .signInAdmin(email, password);
 
-      if (!rawText.trim()) {
-        throw new Error(
-          "The selected event file is empty."
-        );
+      const passwordInput =
+        get("adminPasswordInput");
+
+      if (passwordInput) {
+        passwordInput.value = "";
       }
 
-      /*
-       * har-event-adapter.js allows EventParser to accept
-       * either a direct about_v2 response or a complete HAR.
-       */
-      const parsed =
-        window.EventParser.parse(rawText);
-
-      const gachaData =
-        parseHarGachaData(rawText);
-
-      const sourceFile = {
-        name: file.name,
-        size: file.size,
-        type:
-          file.type || "unknown",
-        importedAt:
-          new Date().toISOString()
-      };
-
-      window.currentEventData =
-        parsed;
-
-      window.currentGachaData =
-        gachaData;
-
-      window.currentEventSourceFile =
-        sourceFile;
-
-      saveImportedData(
-        parsed,
-        gachaData,
-        sourceFile
-      );
-
-      setBadge(
-        parsed.ready
-          ? "Ready"
-          : "Incomplete",
-        parsed.ready
-          ? "ready"
-          : "failed"
-      );
-
-      const openingCount =
-        getGachaOpeningCount(gachaData);
-
-      const gachaStatus =
-        gachaData
-          ? ` ${openingCount} chest-opening request${
-              openingCount === 1
-                ? ""
-                : "s"
-            } also detected.`
-          : " No chest-opening history was detected.";
-
-      statusText.textContent =
-        `${parsed.readyChestCount || 0} chest deck(s) detected from ${file.name}.${gachaStatus}`;
-
-      renderResults(
-        parsed,
-        gachaData
-      );
-
-      updateLegacyPredictorBadges(
-        parsed
-      );
-
-      dispatchImportedEvent({
-        parsed,
-        gachaData,
-        sourceFile,
-        restored: false
-      });
-
-      console.group(
-        "🐉 Noir Live Event Import"
-      );
-
-      console.log(
-        "Source file:",
-        sourceFile
-      );
-
-      console.log(
-        "Parsed event:",
-        parsed
-      );
-
-      console.log(
-        "Parsed gacha history:",
-        gachaData
-      );
-
-      console.groupEnd();
+      renderAccess();
     } catch (error) {
-      console.error(
-        "[Chest Companion] Live event import failed:",
-        error
-      );
-
-      window.currentEventData =
-        null;
-
-      window.currentGachaData =
-        null;
-
-      setBadge(
-        "Failed",
-        "failed"
-      );
-
-      statusText.textContent =
-        error instanceof Error
-          ? error.message
-          : "The event file could not be imported.";
-
-      results.innerHTML = `
-        <div class="developer-error">
-
-          <strong>
-            Import failed
-          </strong>
-
-          <p class="muted-text">
-            ${escapeHtml(
-              error instanceof Error
-                ? error.message
-                : "Unknown import error."
-            )}
-          </p>
-
-        </div>
-      `;
-
-      results.classList.remove(
-        "hidden"
+      window.alert(
+        error?.message ||
+        "Administrator sign-in failed."
       );
     } finally {
-      importButton.disabled =
-        false;
-
-      fileInput.disabled =
-        false;
+      button.disabled = false;
+      button.textContent =
+        "Sign in as Admin";
     }
   }
 
-  function restoreSavedLiveEvent() {
+  async function signOut() {
     try {
-      const savedEvent =
-        JSON.parse(
-          localStorage.getItem(
-            LIVE_EVENT_STORAGE_KEY
-          ) || "null"
-        );
-
-      if (
-        !savedEvent?.data ||
-        !savedEvent.data.chests
-      ) {
-        return false;
-      }
-
-      let savedGacha = null;
-
-      try {
-        const storedGacha =
-          JSON.parse(
-            localStorage.getItem(
-              LIVE_GACHA_STORAGE_KEY
-            ) || "null"
-          );
-
-        savedGacha =
-          storedGacha?.data || null;
-      } catch (error) {
-        console.warn(
-          "[Chest Companion] Could not restore saved gacha history.",
-          error
-        );
-      }
-
-      window.currentEventData =
-        savedEvent.data;
-
-      window.currentGachaData =
-        savedGacha;
-
-      window.currentEventSourceFile =
-        savedEvent.sourceFile || null;
-
-      const sourceName =
-        savedEvent.sourceFile?.name ||
-        "saved event file";
-
-      setBadge(
-        savedEvent.data.ready
-          ? "Restored"
-          : "Incomplete",
-        savedEvent.data.ready
-          ? "ready"
-          : "failed"
-      );
-
-      const openingCount =
-        getGachaOpeningCount(
-          savedGacha
-        );
-
-      const gachaStatus =
-        savedGacha
-          ? ` ${openingCount} saved chest-opening request${
-              openingCount === 1
-                ? ""
-                : "s"
-            } restored.`
-          : "";
-
-      statusText.textContent =
-        `${savedEvent.data.readyChestCount || 0} chest deck(s) restored from ${sourceName}.${gachaStatus}`;
-
-      renderResults(
-        savedEvent.data,
-        savedGacha
-      );
-
-      updateLegacyPredictorBadges(
-        savedEvent.data
-      );
-
-      dispatchImportedEvent({
-        parsed:
-          savedEvent.data,
-
-        gachaData:
-          savedGacha,
-
-        sourceFile:
-          savedEvent.sourceFile ||
-          null,
-
-        restored: true
-      });
-
-      console.info(
-        "[Chest Companion] Saved live event and gacha history restored.",
-        {
-          eventData:
-            savedEvent.data,
-
-          gachaData:
-            savedGacha
-        }
-      );
-
-      return true;
+      await window.ChestDatabase
+        .signOutAdmin();
     } catch (error) {
       console.warn(
-        "[Chest Companion] Could not restore saved live event.",
+        "[Noir] Administrator sign-out failed.",
+        error
+      );
+    }
+
+    access = {
+      user: null,
+      profile: null,
+      isAdmin: false
+    };
+
+    renderAccess();
+  }
+
+  async function publishImportedEvent(event) {
+    if (
+      event?.detail?.restored ||
+      event?.detail?.cloud
+    ) {
+      return;
+    }
+
+    const eventData =
+      event?.detail?.eventData;
+
+    if (!eventData?.chests) {
+      return;
+    }
+
+    const currentAccess =
+      await refreshAccess();
+
+    if (!currentAccess.isAdmin) {
+      setStatus(
+        "The HAR was read on this device but was not published because administrator access was not confirmed.",
+        true
+      );
+      return;
+    }
+
+    const importButton =
+      get("importEventDataButton");
+    const status =
+      get("eventImportStatus");
+
+    if (importButton) {
+      importButton.disabled = true;
+    }
+
+    if (status) {
+      status.textContent =
+        "HAR parsed. Publishing sanitised event data to players...";
+    }
+
+    try {
+      const published =
+        await window.ChestDatabase
+          .publishLiveEvent(
+            eventData,
+            event?.detail?.sourceFile ||
+              null
+          );
+
+      window.LivePredictorEngine
+        ?.publishEventData?.(
+          published.eventData,
+          published.eventData.sourceFile
+        );
+
+      if (status) {
+        status.textContent =
+          `${published.records.length} chest predictor(s) published successfully. Players will load this event automatically.`;
+      }
+
+      setStatus(
+        `Published ${published.eventData.event} at ${new Date(
+          published.publishedAt
+        ).toLocaleString()}.`
+      );
+    } catch (error) {
+      console.error(
+        "[Noir] Event publishing failed.",
         error
       );
 
-      return false;
+      if (status) {
+        status.textContent =
+          error?.message ||
+          "The sanitised event could not be published.";
+      }
+
+      setStatus(
+        "The HAR was imported locally, but cloud publishing failed.",
+        true
+      );
+    } finally {
+      if (importButton) {
+        importButton.disabled =
+          !access.isAdmin;
+      }
     }
   }
 
-  restoreSavedLiveEvent();
-
-  importButton.addEventListener(
-    "click",
-    importEventFile
-  );
-
-  fileInput.addEventListener(
-    "change",
-    () => {
-      const file =
-        fileInput.files?.[0];
-
-      if (!file) {
-        setBadge(
-          "Not imported"
-        );
-
-        statusText.textContent =
-          "No live event data imported.";
-
-        return;
-      }
-
-      setBadge(
-        "File selected"
+  function initialise() {
+    get("adminSignInButton")
+      ?.addEventListener(
+        "click",
+        signIn
       );
 
-      statusText.textContent =
-        `${file.name} is ready to import.`;
-    }
-  );
-});
+    get("adminSignOutButton")
+      ?.addEventListener(
+        "click",
+        signOut
+      );
+
+    window.addEventListener(
+      "noir:event-imported",
+      publishImportedEvent
+    );
+
+    window.chestSupabase?.auth
+      ?.onAuthStateChange?.(
+        () => refreshAccess()
+      );
+
+    refreshAccess();
+  }
+
+  if (
+    document.readyState === "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      initialise,
+      { once: true }
+    );
+  } else {
+    initialise();
+  }
+
+  window.NoirAdminPublisher =
+    Object.freeze({
+      refreshAccess,
+      getAccess: () => ({ ...access })
+    });
+})(window);

@@ -1,257 +1,645 @@
-/* ============================================================
-   CHEST COMPANION BETA — SAFE HAR EVENT ADAPTER
+/* =========================================================
+   CHEST COMPANION V2
+   Database and Authentication
 
-   Purpose:
-   - Lets the existing event importer accept War Dragons .har files.
-   - Extracts the event/about_v2 response locally in the browser.
-   - Decodes HAR response bodies marked as base64.
-   - Passes only the extracted event JSON to the existing EventParser.
-   - Never uploads or stores the full HAR file.
+   
+========================================================= */
 
-   Load after event-parser.js.
-   ============================================================ */
+window.ChestDatabase = {
 
-(function installChestCompanionHarAdapter(window) {
-  "use strict";
-
-  const ABOUT_V2_PATTERN =
-    /\/ext\/dragonsong\/event\/about_v2(?:\?|$)/i;
-
-  function decodeUtf8Base64(value) {
-    const binary = window.atob(value);
-
-    const bytes = Uint8Array.from(
-      binary,
-      character => character.charCodeAt(0)
-    );
-
-    return new TextDecoder("utf-8").decode(bytes);
-  }
-
-  function getResponseText(entry) {
-    const content = entry?.response?.content;
-    const text = content?.text;
-
-    if (typeof text !== "string" || !text.trim()) {
-      return "";
-    }
-
-    if (
-      String(content.encoding || "").toLowerCase() === "base64"
-    ) {
-      return decodeUtf8Base64(text);
-    }
-
-    return text;
-  }
-
-  function parseJsonText(text, label) {
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      throw new Error(
-        `${label} contained invalid JSON: ${error.message}`
-      );
-    }
-  }
-
-  function scoreEventPayload(payload) {
-    if (!payload || typeof payload !== "object") {
-      return -1;
-    }
-
-    let score = 0;
-
-    Object.values(payload).forEach(eventRecord => {
-      const params = eventRecord?.gacha?.params;
-      const decks = params?.decks;
-      const spinTypes = params?.spin_types;
-
-      if (params) score += 10;
-      if (decks && typeof decks === "object") score += 20;
-      if (Array.isArray(spinTypes)) score += 20;
-
-      if (Array.isArray(decks?.freedom_chest)) {
-        score += 100 + decks.freedom_chest.length;
-      }
-
-      if (Array.isArray(decks?.epic_freedom_items)) {
-        score += 25;
-      }
-
-      if (Array.isArray(decks?.legendary_freedom_items)) {
-        score += 25;
-      }
-
-      if (Array.isArray(decks?.mythic_freedom_items)) {
-        score += 25;
-      }
-    });
-
-    return score;
-  }
-
-  function extractAboutV2FromHar(har) {
-    const entries = har?.log?.entries;
-
-    if (!Array.isArray(entries)) {
-      throw new Error(
-        "This file is JSON, but it is not a valid HAR capture."
-      );
-    }
-
-    const candidates = [];
-
-    entries.forEach((entry, entryIndex) => {
-      const url = String(entry?.request?.url || "");
-
-      if (!ABOUT_V2_PATTERN.test(url)) {
-        return;
-      }
-
-      const responseText = getResponseText(entry);
-
-      if (!responseText) {
-        return;
-      }
-
-      try {
-        const payload = JSON.parse(responseText);
-
-        candidates.push({
-          payload,
-          entryIndex,
-          url,
-          score: scoreEventPayload(payload)
-        });
-      } catch (error) {
-        console.warn(
-          "[Chest Companion] Ignored an unreadable about_v2 response.",
-          error
-        );
-      }
-    });
-
-    if (!candidates.length) {
-      throw new Error(
-        "No readable War Dragons event/about_v2 response was found in this HAR file."
-      );
-    }
-
-    candidates.sort((left, right) => {
-      if (right.score !== left.score) {
-        return right.score - left.score;
-      }
-
-      return right.entryIndex - left.entryIndex;
-    });
-
-    return candidates[0];
-  }
-
-  function isHarObject(value) {
+  isAdminProfile(profile) {
     return Boolean(
-      value &&
-      typeof value === "object" &&
-      value.log &&
-      Array.isArray(value.log.entries)
+      profile &&
+      (
+        profile.is_admin === true ||
+        String(profile.role || "")
+          .toLowerCase() === "admin"
+      )
     );
-  }
+  },
 
-  function parseImportText(rawText) {
-    const text = String(rawText || "").trim();
+  async getCurrentAccess() {
+    const supabaseClient =
+      window.chestSupabase;
 
-    if (!text) {
-      throw new Error("The selected import file is empty.");
+    if (!supabaseClient) {
+      throw new Error(
+        "Supabase is not connected."
+      );
     }
 
-    const parsed = parseJsonText(text, "The selected file");
+    const { data, error } =
+      await supabaseClient.auth
+        .getSession();
 
-    if (!isHarObject(parsed)) {
+    if (error) {
+      throw error;
+    }
+
+    const user =
+      data.session?.user || null;
+
+    if (!user) {
       return {
-        kind: "event-json",
-        eventPayload: parsed,
-        diagnostics: null
+        user: null,
+        profile: null,
+        isAdmin: false
       };
     }
 
-    const extracted = extractAboutV2FromHar(parsed);
+    const {
+      data: profile,
+      error: profileError
+    } = await supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      throw profileError;
+    }
 
     return {
-      kind: "har",
-      eventPayload: extracted.payload,
-      diagnostics: {
-        sourceEntryIndex: extracted.entryIndex,
-        sourceUrl: extracted.url,
-        score: extracted.score
-      }
+      user,
+      profile,
+      isAdmin:
+        this.isAdminProfile(profile)
     };
-  }
+  },
 
-  function installParserWrapper() {
-    const EventParser = window.EventParser;
+  async signInAdmin(email, password) {
+    const supabaseClient =
+      window.chestSupabase;
 
-    if (!EventParser || typeof EventParser.parse !== "function") {
-      return false;
+    const {
+      data,
+      error
+    } = await supabaseClient.auth
+      .signInWithPassword({
+        email: String(email || "").trim(),
+        password: String(password || "")
+      });
+
+    if (error) {
+      throw error;
     }
 
-    if (EventParser.__harAdapterInstalled) {
-      return true;
-    }
-
-    const originalParse =
-      EventParser.parse.bind(EventParser);
-
-    EventParser.parse = function parseEventOrHar(rawText) {
-      const imported = parseImportText(rawText);
-
-      window.ChestCompanionLastImport = {
-        kind: imported.kind,
-        diagnostics: imported.diagnostics,
-        importedAt: new Date().toISOString()
-      };
-
-      return originalParse(
-        JSON.stringify(imported.eventPayload)
+    if (data.user) {
+      await this.getOrCreateProfile(
+        data.user
       );
-    };
+    }
 
-    Object.defineProperty(
-      EventParser,
-      "__harAdapterInstalled",
-      {
-        value: true,
-        enumerable: false,
-        configurable: false,
-        writable: false
-      }
-    );
+    const access =
+      await this.getCurrentAccess();
 
-    console.info(
-      "[Chest Companion] HAR event adapter ready."
-    );
+    if (!access.isAdmin) {
+      await supabaseClient.auth.signOut();
+
+      throw new Error(
+        "This account does not have Noir administrator access."
+      );
+    }
+
+    return access;
+  },
+
+  async signOutAdmin() {
+    const { error } =
+      await window.chestSupabase.auth
+        .signOut();
+
+    if (error) {
+      throw error;
+    }
 
     return true;
+  },
+
+  /*
+    Gets the current Supabase session.
+
+    If the player has never opened Chest Companion before,
+    an anonymous account is automatically created.
+  */
+
+  async getOrCreateSession() {
+
+    const supabaseClient =
+      window.chestSupabase;
+
+
+    if (!supabaseClient) {
+
+      throw new Error(
+        "Supabase client is unavailable."
+      );
+
+    }
+
+
+    const {
+      data: sessionData,
+      error: sessionError
+    } =
+      await supabaseClient.auth.getSession();
+
+
+    if (sessionError) {
+
+      throw sessionError;
+
+    }
+
+
+    if (sessionData.session) {
+
+      return sessionData.session;
+
+    }
+
+
+    const {
+      data: anonymousData,
+      error: anonymousError
+    } =
+      await supabaseClient.auth
+        .signInAnonymously();
+
+
+    if (anonymousError) {
+
+      throw anonymousError;
+
+    }
+
+
+    if (!anonymousData.session) {
+
+      throw new Error(
+        "Anonymous sign-in did not create a session."
+      );
+
+    }
+
+
+    return anonymousData.session;
+
+  },
+
+
+  /*
+    Reads the player's profile.
+
+    If a profile does not exist yet,
+    Chest Companion creates one automatically.
+  */
+
+  async getOrCreateProfile(user) {
+
+    const supabaseClient =
+      window.chestSupabase;
+
+
+    const {
+      data: existingProfile,
+      error: readError
+    } =
+      await supabaseClient
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
+
+    if (readError) {
+
+      throw readError;
+
+    }
+
+
+    if (existingProfile) {
+
+      await supabaseClient
+        .from("profiles")
+        .update({
+          last_active_at:
+            new Date().toISOString()
+        })
+        .eq("id", user.id);
+
+
+      return existingProfile;
+
+    }
+
+
+    const newProfile = {
+
+      id: user.id,
+
+      nickname: "Tester",
+
+      alliance_name: null,
+
+      avatar_url: null,
+
+      preferred_theme:
+        "crystal_storm",
+
+      favourite_chest: null,
+
+      last_active_at:
+        new Date().toISOString()
+
+    };
+
+
+    const {
+      data: createdProfile,
+      error: createError
+    } =
+      await supabaseClient
+        .from("profiles")
+        .insert(newProfile)
+        .select()
+        .single();
+
+
+    if (createError) {
+
+      throw createError;
+
+    }
+
+
+    return createdProfile;
+
+  },
+
+
+  /*
+    Starts Chest Companion's cloud connection.
+
+    This returns:
+
+    - the anonymous Supabase user
+    - the player's profile
+  */
+
+  async initialisePlayer() {
+
+    const session =
+      await this.getOrCreateSession();
+
+
+    const user =
+      session.user;
+
+
+    if (!user) {
+
+      throw new Error(
+        "No authenticated player was found."
+      );
+
+    }
+
+
+    const profile =
+      await this.getOrCreateProfile(user);
+
+
+    return {
+
+      session,
+
+      user,
+
+      profile
+
+    };
+
+  },
+
+
+  /*
+    Saves nickname, alliance and favourite chest.
+  */
+
+  async saveProfile(
+    userId,
+    profileDetails
+  ) {
+
+    const supabaseClient =
+      window.chestSupabase;
+
+
+    const profileUpdate = {
+
+      nickname:
+        profileDetails.nickname ||
+        "Tester",
+
+      alliance_name:
+        profileDetails.alliance_name ||
+        null,
+
+      favourite_chest:
+        profileDetails.favourite_chest ||
+        null,
+
+      last_active_at:
+        new Date().toISOString()
+
+    };
+
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", userId)
+        .select()
+        .single();
+
+
+    if (error) {
+
+      throw error;
+
+    }
+
+
+    return data;
+
+  },
+  async getPredictor(chestType) {
+
+  const supabaseClient =
+    window.chestSupabase;
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from("predictors")
+      .select("*")
+      .eq("chest_type", chestType)
+      .eq("active", true)
+      .maybeSingle();
+
+  if (error) {
+
+    throw error;
+
   }
 
-  window.ChestCompanionHarAdapter =
-    Object.freeze({
-      parseImportText,
-      extractAboutV2FromHar,
-      install: installParserWrapper
-    });
+  return data;
 
-  if (!installParserWrapper()) {
-    document.addEventListener(
-      "DOMContentLoaded",
-      installParserWrapper,
-      { once: true }
-    );
+},
+async savePredictor({
+  chestType,
+  version,
+  predictorData,
+  uploadedBy = null
+}) {
+  const supabaseClient = window.chestSupabase;
 
-    window.addEventListener(
-      "load",
-      installParserWrapper,
-      { once: true }
+  if (!supabaseClient) {
+    throw new Error(
+      "Supabase is not connected."
     );
   }
-})(window);
+
+  const normalisedChestType = String(
+    chestType || ""
+  )
+    .trim()
+    .toLowerCase();
+
+    if (
+  ![
+    "gold",
+    "platinum",
+    "draconic",
+    "freedom"
+  ].includes(
+    normalisedChestType
+  )
+) {
+    throw new Error(
+      "Unsupported chest type."
+    );
+  }
+
+  if (
+    !predictorData ||
+    typeof predictorData !== "object"
+  ) {
+    throw new Error(
+      "Predictor data is missing or invalid."
+    );
+  }
+
+  /*
+   * First deactivate the currently active
+   * predictor for this chest type.
+   */
+  const {
+    error: deactivateError
+  } = await supabaseClient
+    .from("predictors")
+    .update({
+      active: false
+    })
+    .eq(
+      "chest_type",
+      normalisedChestType
+    )
+    .eq("active", true);
+
+  if (deactivateError) {
+    throw deactivateError;
+  }
+
+  /*
+   * Then upload the replacement and mark
+   * it as the active predictor.
+   */
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("predictors")
+    .insert({
+      chest_type: normalisedChestType,
+      version:
+        version ||
+        new Date().toISOString(),
+      predictor_data: predictorData,
+      active: true,
+      uploaded_by: uploadedBy
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+},
+
+async getActivePredictors() {
+  const supabaseClient =
+    window.chestSupabase;
+
+  if (!supabaseClient) {
+    throw new Error(
+      "Supabase is not connected."
+    );
+  }
+
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .from("predictors")
+    .select(
+      [
+        "id",
+        "chest_type",
+        "version",
+        "predictor_data",
+        "uploaded_at"
+      ].join(",")
+    )
+    .eq("active", true)
+    .order(
+      "uploaded_at",
+      {
+        ascending: false
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+},
+
+async publishLiveEvent(
+  eventData,
+  sourceFile = null
+) {
+  const access =
+    await this.getCurrentAccess();
+
+  if (!access.isAdmin) {
+    throw new Error(
+      "Administrator access is required to publish event data."
+    );
+  }
+
+  if (
+    !eventData?.chests ||
+    typeof eventData.chests !== "object"
+  ) {
+    throw new Error(
+      "The imported HAR did not contain usable chest decks."
+    );
+  }
+
+  const publishedAt =
+    new Date().toISOString();
+
+  const version =
+    `${eventData.event || "event"}-${publishedAt}`;
+
+  const safeSource = sourceFile
+    ? {
+        name: sourceFile.name || "Proxyman HAR",
+        importedAt:
+          sourceFile.importedAt ||
+          publishedAt
+      }
+    : null;
+
+  const sanitisedEvent = {
+    schema: "noir-live-event-v1",
+    event: eventData.event || "Current event",
+    importedAt:
+      eventData.importedAt ||
+      publishedAt,
+    publishedAt,
+    ready: Boolean(eventData.ready),
+    readyChestCount:
+      Number(eventData.readyChestCount) || 0,
+    chests: eventData.chests,
+    decks: eventData.decks || {},
+    drops: eventData.drops || {},
+    deckIndices:
+      eventData.deckIndices || {},
+    spinTypes:
+      eventData.spinTypes || [],
+    sourceFile: safeSource
+  };
+
+  const chestTypes = [
+    "gold",
+    "platinum",
+    "draconic",
+    "freedom"
+  ].filter(
+    chestType =>
+      sanitisedEvent.chests[
+        chestType
+      ]?.found
+  );
+
+  if (!chestTypes.length) {
+    throw new Error(
+      "No supported chest decks were found to publish."
+    );
+  }
+
+  const records = [];
+
+  for (const chestType of chestTypes) {
+    records.push(
+      await this.savePredictor({
+        chestType,
+        version,
+        predictorData: {
+          schema: "noir-live-event-v1",
+          chestType,
+          eventData: sanitisedEvent
+        },
+        uploadedBy: access.user.id
+      })
+    );
+  }
+
+  return {
+    eventData: sanitisedEvent,
+    records,
+    version,
+    publishedAt
+  };
+},
+
+};
+
+
+console.log(
+  "Chest Companion: Database tools loaded."
+);

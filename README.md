@@ -19,26 +19,24 @@ Features may be:
 
 ---
 
-## ✅ Current Features
+## ✅ Beta Features
 
-- Gold Chest Predictor
-- Platinum Chest Predictor
-- Chest Reward Tracker
-- Sequence Detection
-- CSV Import
-- CSV Export
-- Event Statistics
-- Local Save Support
+- One admin-only Proxyman HAR import
+- Sanitised event publishing through Supabase
+- Automatic player loading of the current event
+- Gold, Platinum, Draconic and Freedom predictors
+- Live reward entry and sequence-position detection
+- Visual upcoming-rewards table
+- Bonus Chest markers after 30 Gold, Platinum or Draconic Chests
+- Bonus Chest markers after 15 Freedom Chests
+- Player progress saved locally
 
 ---
 
 ## 🚧 Currently in Development
 
-- Improved Sequence Matching
-- Better Error Messages
 - Double Armory Support
 - Reward Planner
-- Future Chest Predictions
 - Developer Testing Tools
 - UI Improvements
 - Performance Optimisation
@@ -78,4 +76,4 @@ All game trademarks remain the property of their respective owners.
 
 ---
 
-Built with ❤️ 
+Built with ❤️

@@ -1627,6 +1627,18 @@
           rgba(185, 149, 66, 0.06);
       }
 
+      .lp-prediction-card.lp-bonus {
+        border-color:
+          rgba(101, 226, 180, 0.55);
+
+        background:
+          linear-gradient(
+            145deg,
+            rgba(101, 226, 180, 0.16),
+            rgba(18, 70, 54, 0.12)
+          );
+      }
+
       .lp-prediction-position {
         display: flex;
         align-items: center;
@@ -4089,7 +4101,14 @@
       position,
       name: String(name),
       code: String(code),
-      amount
+      amount,
+      isBonus: Boolean(
+        prediction.isBonus ||
+        prediction.bonus
+      ),
+      bonusEvery:
+        Number(prediction.bonusEvery) ||
+        null
     };
   }
 
@@ -4219,9 +4238,11 @@
             }
 
             meta.push(
-              `Deck position ${formatNumber(
-                prediction.position
-              )}`
+              prediction.isBonus
+                ? `Earned after ${prediction.bonusEvery || "the required number of"} regular chests`
+                : `Deck position ${formatNumber(
+                    prediction.position
+                  )}`
             );
 
             return `
@@ -4230,10 +4251,18 @@
                   index === 0
                     ? "lp-next"
                     : ""
+                } ${
+                  prediction.isBonus
+                    ? "lp-bonus"
+                    : ""
                 }"
               >
                 <div class="lp-prediction-position">
-                  +${index + 1}
+                  ${
+                    prediction.isBonus
+                      ? "★"
+                      : `+${index + 1}`
+                  }
                 </div>
 
                 <div class="lp-prediction-copy">
@@ -4250,10 +4279,15 @@
                   </div>
 
                   ${
-                    index === 0
+                    index === 0 ||
+                    prediction.isBonus
                       ? `
                         <div class="lp-prediction-badge">
-                          Next chest
+                          ${
+                            prediction.isBonus
+                              ? "Bonus chest"
+                              : "Next chest"
+                          }
                         </div>
                       `
                       : ""

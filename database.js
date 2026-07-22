@@ -645,7 +645,13 @@ async publishLiveEvent(
     deckIndices:
       eventData.deckIndices || {},
     spinTypes:
-      eventData.spinTypes || []
+      eventData.spinTypes || [],
+    doubleArmory:
+      eventData.doubleArmory || {
+        detected: false,
+        ready: false,
+        sides: {}
+      }
   };
 
   const chestTypes = [

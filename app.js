@@ -1376,6 +1376,17 @@
 
         );
 
+      if (
+        window.ChestPredictorCloud
+          ?.load
+      ) {
+        await withTimeout(
+          window.ChestPredictorCloud
+            .load(),
+          15000
+        );
+      }
+
 
       currentUser =
         player?.user ||
@@ -1965,6 +1976,25 @@
     async function openChestTracker(
     chestType
   ) {
+
+    /*
+     * Beta uses the single imported HAR/about_v2 event for every
+     * supported chest. Open the live predictor directly from the
+     * home chest cards so players do not fall into the retired
+     * spreadsheet workflow below.
+     */
+    if (
+      window.LivePredictorUI?.open &&
+      window.LivePredictorEngine?.isSupportedChest?.(
+        chestType
+      )
+    ) {
+      window.LivePredictorUI.open(
+        chestType
+      );
+
+      return;
+    }
 
     const eventId =
       getSelectedEventId();

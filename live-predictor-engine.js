@@ -2849,6 +2849,34 @@ function valuesMatch(
 
     const upcoming = [];
 
+    const bonusEvery = {
+      gold: 30,
+      platinum: 30,
+      draconic: 30,
+      freedom: 15
+    }[normalised] || null;
+
+    let regularSinceBonus = bonusEvery
+      ? getObservations(normalised)
+          .filter(
+            observation =>
+              !observation?.isBonus &&
+              !observation?.bonus
+          )
+          .reduce(
+            (total, observation) =>
+              total + Math.max(
+                1,
+                toFiniteNumber(
+                  observation?.chestCount ??
+                  observation?.chestsOpened,
+                  1
+                ) || 1
+              ),
+            0
+          ) % bonusEvery
+      : 0;
+
     for (
       let offset = 1;
       offset <= safeCount;
@@ -2913,6 +2941,31 @@ function valuesMatch(
                 `${reward.amount}`
               )
       });
+
+      if (bonusEvery) {
+        regularSinceBonus += 1;
+
+        if (regularSinceBonus === bonusEvery) {
+          const chestLabel =
+            getChestLabel(normalised);
+
+          upcoming.push({
+            number: upcoming.length + 1,
+            index: null,
+            position: null,
+            name: `${chestLabel} Bonus Chest`,
+            label: `${chestLabel} Bonus Chest`,
+            code: `${normalised}_bonus`,
+            amount: null,
+            isBonus: true,
+            bonusEvery,
+            bonusAfterRegularChest: offset,
+            displayValue: `${chestLabel} Bonus Chest`
+          });
+
+          regularSinceBonus = 0;
+        }
+      }
     }
 
     return upcoming;

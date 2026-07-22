@@ -65,6 +65,21 @@ class EventParser {
 
     visited.add(value);
 
+    const preferredArmoryEntry =
+      Object.entries(value)
+        .find(
+          ([key, childValue]) =>
+            /spend_breeding_tokens/i.test(key) &&
+            childValue?.gacha &&
+            typeof childValue.gacha === "object" &&
+            childValue.gacha.params?.deck_indices &&
+            childValue.gacha.params?.decks
+        );
+
+    if (preferredArmoryEntry) {
+      return preferredArmoryEntry[1].gacha;
+    }
+
     if (
       value.gacha &&
       typeof value.gacha === "object"

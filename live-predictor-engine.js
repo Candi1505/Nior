@@ -39,11 +39,21 @@
     freedom: "Freedom"
   };
   
-  const CHEST_DECK_KEYS = {
+const CHEST_DECK_KEYS = {
   gold: "gold_chest",
   platinum: "platinum_chest",
   draconic: "dragfrag_chest_tier3",
   freedom: "freedom_chest"
+};
+
+const CHEST_BONUS_DECK_KEYS = {
+  platinum: "platinum_chest_bonus",
+  draconic: "dragfrag_chest_tier3_bonus"
+};
+
+const CHEST_DIRECT_BONUS_POOL_KEYS = {
+  gold: "legendary_items",
+  freedom: "mythic_freedom_items"
 };
 
   let state =
@@ -206,7 +216,9 @@
 
     importedGachaIds: [],
 
-    eventFingerprint: null
+    eventFingerprint: null,
+
+    eventName: null
   };
 }
 
@@ -261,6 +273,12 @@
     typeof saved.eventFingerprint ===
       "string"
       ? saved.eventFingerprint
+      : null,
+
+  eventName:
+    typeof saved.eventName ===
+      "string"
+      ? saved.eventName
       : null
 };
       
@@ -546,12 +564,21 @@
     const fingerprint =
       getEventFingerprint(eventData);
 
+    const eventName =
+      normaliseText(
+        eventData?.event ||
+        eventData?.eventName ||
+        eventData?.name ||
+        "Current Event"
+      );
+
     if (!fingerprint) {
       return false;
     }
 
     if (!state.eventFingerprint) {
       state.eventFingerprint = fingerprint;
+      state.eventName = eventName;
       savePlayerState();
       return false;
     }
@@ -560,6 +587,28 @@
       state.eventFingerprint ===
       fingerprint
     ) {
+      if (state.eventName !== eventName) {
+        state.eventName = eventName;
+        savePlayerState();
+      }
+
+      return false;
+    }
+
+    /*
+     * A corrected/re-published copy of the same event must not
+     * erase a player's observations. Older saved state did not
+     * include eventName, so it is migrated without data loss.
+     */
+    if (
+      !state.eventName ||
+      normaliseText(state.eventName)
+        .toLowerCase() ===
+      eventName.toLowerCase()
+    ) {
+      state.eventFingerprint = fingerprint;
+      state.eventName = eventName;
+      savePlayerState();
       return false;
     }
 
@@ -571,6 +620,7 @@
 
     state.importedGachaIds = [];
     state.eventFingerprint = fingerprint;
+    state.eventName = eventName;
     savePlayerState();
 
     window.dispatchEvent(
@@ -2716,10 +2766,417 @@ function valuesMatch(
      POSITION SOLVER
      ========================================================== */
 
+  function getNestedPoolKey(
+    deckKey,
+    deckValue
+  ) {
+    const definition =
+      resolveDropDefinition(
+        deckKey,
+        deckValue
+      );
+
+    if (!definition) {
+      return "";
+    }
+
+    const possibleKey =
+      normaliseText(
+        firstDefined([
+          definition.deck,
+          definition.deckKey,
+          definition.deck_key,
+          definition.pool,
+          definition.poolKey,
+          definition.pool_key,
+          definition.drop,
+          definition.dropKey,
+          definition.drop_key,
+          definition.rewardPool,
+          definition.reward_pool,
+          definition.key,
+          definition.id,
+          definition.value
+        ], "")
+      );
+
+    return getNamedDeck(possibleKey).length
+      ? possibleKey
+      : "";
+  }
+
+  function getResolvedPoolDeck(
+    poolKey,
+    chestType
+  ) {
+    return getNamedDeck(poolKey)
+      .map(
+        (deckValue, index) => {
+          const definition =
+            resolveDropDefinition(
+              poolKey,
+              deckValue
+            );
+
+          if (!definition) {
+            return null;
+          }
+
+          return normaliseDeckEntry(
+            {
+              ...cloneValue(definition),
+              matchValue: {
+                name:
+                  getRewardName(definition),
+                code:
+                  getRewardCode(definition),
+                amount:
+                  getRewardAmount(definition)
+              },
+              deckValue,
+              poolKey,
+              poolIndex: index
+            },
+            index,
+            chestType
+          );
+        }
+      )
+      .filter(Boolean);
+  }
+
+  function findCyclicRewardStarts(
+    deck,
+    observations
+  ) {
+    if (!deck.length || !observations.length) {
+      return [];
+    }
+
+    const starts = [];
+
+    for (
+      let start = 0;
+      start < deck.length;
+      start += 1
+    ) {
+      const matched =
+        observations.every(
+          (observation, offset) =>
+            valuesMatch(
+              deck[
+                (start + offset) %
+                deck.length
+              ].matchValue,
+              observation.matchValue ??
+              observation.value
+            )
+        );
+
+      if (matched) {
+        starts.push(start);
+      }
+    }
+
+    return starts;
+  }
+
+  function solveNestedPosition(
+    chestType = state.activeChest
+  ) {
+    const normalised =
+      normaliseChestType(chestType);
+    const mainDeckKey =
+      getChestDeckKey(normalised);
+    const mainDeck =
+      getNamedDeck(mainDeckKey);
+    const history =
+      getObservations(normalised);
+    const regularHistory =
+      history.filter(
+        observation =>
+          !observation?.isBonus &&
+          !observation?.bonus
+      );
+
+    if (!mainDeck.length || !regularHistory.length) {
+      return null;
+    }
+
+    const samplePoolKey =
+      mainDeck
+        .map(
+          value =>
+            getNestedPoolKey(
+              mainDeckKey,
+              value
+            )
+        )
+        .find(Boolean);
+
+    if (!samplePoolKey) {
+      return null;
+    }
+
+    const bonusDeckKey =
+      CHEST_BONUS_DECK_KEYS[
+        normalised
+      ] || "";
+    const bonusDeck =
+      getNamedDeck(bonusDeckKey);
+    const directBonusPoolKey =
+      CHEST_DIRECT_BONUS_POOL_KEYS[
+        normalised
+      ] || "";
+    const hasBonusHistory =
+      history.some(
+        observation =>
+          observation?.isBonus ||
+          observation?.bonus
+      );
+    const bonusStarts =
+      hasBonusHistory && bonusDeck.length
+        ? bonusDeck.map((_, index) => index)
+        : [null];
+    const poolDeckCache =
+      new Map();
+    const matchCache =
+      new Map();
+    const candidates = [];
+
+    function getPoolDeck(poolKey) {
+      if (!poolDeckCache.has(poolKey)) {
+        poolDeckCache.set(
+          poolKey,
+          getResolvedPoolDeck(
+            poolKey,
+            normalised
+          )
+        );
+      }
+
+      return poolDeckCache.get(poolKey);
+    }
+
+    for (
+      let regularStart = 0;
+      regularStart < mainDeck.length;
+      regularStart += 1
+    ) {
+      for (const bonusStart of bonusStarts) {
+        let regularOffset = 0;
+        let bonusOffset = 0;
+        let assignmentValid = true;
+        const poolObservations = {};
+
+        for (const observation of history) {
+          const isBonus = Boolean(
+            observation?.isBonus ||
+            observation?.bonus
+          );
+
+          if (
+            isBonus &&
+            !bonusDeck.length
+          ) {
+            if (directBonusPoolKey) {
+              if (
+                !poolObservations[
+                  directBonusPoolKey
+                ]
+              ) {
+                poolObservations[
+                  directBonusPoolKey
+                ] = [];
+              }
+
+              poolObservations[
+                directBonusPoolKey
+              ].push(observation);
+            }
+
+            continue;
+          }
+
+          const activeDeckKey =
+            isBonus
+              ? bonusDeckKey
+              : mainDeckKey;
+          const activeDeck =
+            isBonus
+              ? bonusDeck
+              : mainDeck;
+          const activeStart =
+            isBonus
+              ? bonusStart
+              : regularStart;
+          const offset =
+            isBonus
+              ? bonusOffset++
+              : regularOffset++;
+          const deckValue =
+            activeDeck[
+              (activeStart + offset) %
+              activeDeck.length
+            ];
+          const poolKey =
+            getNestedPoolKey(
+              activeDeckKey,
+              deckValue
+            );
+
+          if (!poolKey) {
+            assignmentValid = false;
+            break;
+          }
+
+          if (!poolObservations[poolKey]) {
+            poolObservations[poolKey] = [];
+          }
+
+          poolObservations[poolKey].push(
+            observation
+          );
+        }
+
+        if (!assignmentValid) {
+          continue;
+        }
+
+        const poolStarts = {};
+
+        for (
+          const [poolKey, observations]
+          of Object.entries(poolObservations)
+        ) {
+          const observationKey =
+            observations
+              .map(
+                observation =>
+                  createRewardMatchKey(
+                    observation.matchValue ??
+                    observation.value
+                  )
+              )
+              .join("|");
+          const cacheKey =
+            `${poolKey}::${observationKey}`;
+
+          if (!matchCache.has(cacheKey)) {
+            matchCache.set(
+              cacheKey,
+              findCyclicRewardStarts(
+                getPoolDeck(poolKey),
+                observations
+              )
+            );
+          }
+
+          const starts =
+            matchCache.get(cacheKey);
+
+          if (!starts.length) {
+            assignmentValid = false;
+            break;
+          }
+
+          poolStarts[poolKey] = starts;
+        }
+
+        if (assignmentValid) {
+          candidates.push({
+            regularStart,
+            bonusStart,
+            regularCount:
+              regularHistory.length,
+            bonusCount:
+              history.length -
+              regularHistory.length,
+            poolStarts,
+            poolCounts:
+              Object.fromEntries(
+                Object.entries(
+                  poolObservations
+                ).map(
+                  ([poolKey, observations]) =>
+                    [poolKey, observations.length]
+                )
+              )
+          });
+        }
+      }
+    }
+
+    const uniqueRegularStarts =
+      Array.from(
+        new Set(
+          candidates.map(
+            candidate =>
+              candidate.regularStart
+          )
+        )
+      );
+    const solvedCandidate =
+      candidates.length === 1 &&
+      Object.values(
+        candidates[0]?.poolStarts || {}
+      ).every(
+        starts => starts.length === 1
+      )
+        ? candidates[0]
+        : null;
+    let solvedState = null;
+
+    if (solvedCandidate) {
+      const poolCursors = {};
+
+      Object.entries(
+        solvedCandidate.poolStarts
+      ).forEach(
+        ([poolKey, starts]) => {
+          const poolLength =
+            getPoolDeck(poolKey).length;
+
+          poolCursors[poolKey] =
+            (
+              starts[0] +
+              solvedCandidate
+                .poolCounts[poolKey]
+            ) % poolLength;
+        }
+      );
+
+      solvedState = {
+        ...solvedCandidate,
+        mainDeckKey,
+        bonusDeckKey,
+        poolCursors
+      };
+    }
+
+    return {
+      candidates,
+      candidateCount:
+        candidates.length,
+      regularStarts:
+        uniqueRegularStarts,
+      solved:
+        Boolean(solvedState),
+      solvedState
+    };
+  }
+
   function findCandidateStarts(
     chestType =
       state.activeChest
   ) {
+    const nestedSolution =
+      solveNestedPosition(chestType);
+
+    if (nestedSolution) {
+      return nestedSolution.regularStarts;
+    }
+
     const deck =
       getNormalisedDeck(
         chestType
@@ -2856,6 +3313,11 @@ function valuesMatch(
           !observation?.bonus
       );
 
+    const nestedSolution =
+      solveNestedPosition(
+        normalised
+      );
+
     if (!deck.length) {
       return {
         available: false,
@@ -2942,11 +3404,23 @@ function valuesMatch(
       );
 
     const solved =
-      candidateStarts.length === 1;
+      nestedSolution
+        ? nestedSolution.solved
+        : candidateStarts.length === 1;
 
     const currentIndex =
       solved
-        ? currentPositions[0]
+        ? (
+            nestedSolution?.solvedState
+              ? (
+                  nestedSolution
+                    .solvedState
+                    .regularStart +
+                  observations.length -
+                  1
+                ) % deck.length
+              : currentPositions[0]
+          )
         : null;
 
     return {
@@ -2961,7 +3435,9 @@ function valuesMatch(
         observations.length,
 
       candidateCount:
-        candidateStarts.length,
+        nestedSolution
+          ? nestedSolution.candidateCount
+          : candidateStarts.length,
 
       candidates:
         candidateStarts,
@@ -2982,6 +3458,12 @@ function valuesMatch(
               currentIndex + 1
             ) %
             deck.length,
+
+      nestedState:
+        cloneValue(
+          nestedSolution?.solvedState ||
+          null
+        ),
 
       confidence:
         calculateConfidence(
@@ -3046,6 +3528,21 @@ function valuesMatch(
 
     const upcoming = [];
 
+    const nestedState =
+      solution.nestedState;
+    const nestedMainDeck =
+      nestedState
+        ? getNamedDeck(
+            nestedState.mainDeckKey
+          )
+        : [];
+    const nestedPoolCursors =
+      nestedState
+        ? {
+            ...nestedState.poolCursors
+          }
+        : {};
+
     const bonusEvery = {
       gold: 30,
       platinum: 30,
@@ -3099,15 +3596,58 @@ function valuesMatch(
       offset <= safeCount;
       offset += 1
     ) {
-      const index =
-        (
-          solution.currentIndex +
-          offset
-        ) %
-        deck.length;
+      let index;
+      let reward;
 
-      const reward =
-        deck[index];
+      if (nestedState) {
+        index =
+          (
+            nestedState.regularStart +
+            nestedState.regularCount +
+            offset -
+            1
+          ) % nestedMainDeck.length;
+
+        const deckValue =
+          nestedMainDeck[index];
+        const poolKey =
+          getNestedPoolKey(
+            nestedState.mainDeckKey,
+            deckValue
+          );
+        const poolDeck =
+          getResolvedPoolDeck(
+            poolKey,
+            normalised
+          );
+        const poolCursor =
+          nestedPoolCursors[poolKey];
+
+        if (
+          !poolKey ||
+          !poolDeck.length ||
+          !Number.isInteger(poolCursor)
+        ) {
+          break;
+        }
+
+        reward =
+          poolDeck[poolCursor];
+        nestedPoolCursors[poolKey] =
+          (
+            poolCursor + 1
+          ) % poolDeck.length;
+      } else {
+        index =
+          (
+            solution.currentIndex +
+            offset
+          ) %
+          deck.length;
+
+        reward =
+          deck[index];
+      }
 
       upcoming.push({
         number:

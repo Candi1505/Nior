@@ -307,8 +307,8 @@
       return "";
     }
 
-    return (
-      Object.keys(payload).find(key => {
+    const eventKeys =
+      Object.keys(payload).filter(key => {
         const params =
           payload[key]?.gacha?.params;
 
@@ -316,7 +316,15 @@
           params?.deck_indices &&
           params?.decks
         );
-      }) || ""
+      });
+
+    return (
+      eventKeys.find(
+        key =>
+          /spend_breeding_tokens/i.test(key)
+      ) ||
+      eventKeys[0] ||
+      ""
     );
   }
 

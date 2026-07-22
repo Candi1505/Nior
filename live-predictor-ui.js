@@ -1159,18 +1159,6 @@
         overflow-wrap: anywhere;
       }
 
-      .lp-reward-option-code {
-        display: block;
-        margin-top: 3px;
-
-        color: #707070;
-
-        font-size: 11px;
-        line-height: 1.3;
-
-        overflow-wrap: anywhere;
-      }
-
       .lp-reward-option-amount {
         flex: 0 0 auto;
 
@@ -2138,7 +2126,7 @@
                   id="lpRewardSearch"
                   class="lp-input"
                   type="search"
-                  placeholder="Search reward name or code"
+                  placeholder="Search reward name"
                   autocomplete="off"
                 />
               </div>
@@ -3312,13 +3300,6 @@
             selectedRewardState.key ===
               reward.key;
 
-          const codeText =
-            reward.code
-              ? escapeHTML(
-                  reward.code
-                )
-              : "No reward code";
-
           const amountText =
             reward.amount === null
               ? ""
@@ -3349,11 +3330,6 @@
                   )}
                 </span>
 
-                <span
-                  class="lp-reward-option-code"
-                >
-                  ${codeText}
-                </span>
               </span>
 
               ${
@@ -3587,12 +3563,6 @@
       selectedReward.name;
 
     const metaParts = [];
-
-    if (selectedReward.code) {
-      metaParts.push(
-        `Code: ${selectedReward.code}`
-      );
-    }
 
     if (
       selectedReward.amount !== null

@@ -1039,10 +1039,25 @@ function resolveDeckReward(
     }
   ];
 
-  const nestedDeckKey =
-    normaliseText(
-      definition.id
-    );
+   const nestedDeckKey =
+  normaliseText(
+    firstDefined([
+      definition.deck,
+      definition.deckKey,
+      definition.deck_key,
+      definition.pool,
+      definition.poolKey,
+      definition.pool_key,
+      definition.drop,
+      definition.dropKey,
+      definition.drop_key,
+      definition.rewardPool,
+      definition.reward_pool,
+      definition.key,
+      definition.id,
+      definition.value
+    ], "")
+  );
 
   if (
     nestedDeckKey &&

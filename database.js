@@ -113,6 +113,101 @@ window.ChestDatabase = {
     return this.getCurrentAccess();
   },
 
+  async signUpMember(email, password, nickname = "") {
+    const cleanEmail =
+      String(email || "").trim();
+    const cleanPassword =
+      String(password || "");
+    const cleanNickname =
+      String(nickname || "")
+        .trim()
+        .slice(0, 30);
+
+    if (!cleanEmail) {
+      throw new Error("Enter your email address.");
+    }
+
+    if (cleanPassword.length < 8) {
+      throw new Error(
+        "Use a password with at least 8 characters."
+      );
+    }
+
+    const { data, error } =
+      await window.chestSupabase.auth
+        .signUp({
+          email: cleanEmail,
+          password: cleanPassword,
+          options: {
+            emailRedirectTo:
+              window.location.href
+                .split("#")[0]
+                .split("?")[0],
+            data: {
+              nickname:
+                cleanNickname || "Player"
+            }
+          }
+        });
+
+    if (error) throw error;
+
+    if (data.user && data.session) {
+      await this.getOrCreateProfile(data.user);
+    }
+
+    return {
+      user: data.user || null,
+      session: data.session || null,
+      confirmationRequired:
+        Boolean(data.user && !data.session)
+    };
+  },
+
+  async sendPasswordReset(email) {
+    const cleanEmail =
+      String(email || "").trim();
+
+    if (!cleanEmail) {
+      throw new Error("Enter your email address first.");
+    }
+
+    const { error } =
+      await window.chestSupabase.auth
+        .resetPasswordForEmail(
+          cleanEmail,
+          {
+            redirectTo:
+              window.location.href
+                .split("#")[0]
+                .split("?")[0]
+          }
+        );
+
+    if (error) throw error;
+    return true;
+  },
+
+  async updateMemberPassword(password) {
+    const cleanPassword =
+      String(password || "");
+
+    if (cleanPassword.length < 8) {
+      throw new Error(
+        "Use a password with at least 8 characters."
+      );
+    }
+
+    const { error } =
+      await window.chestSupabase.auth
+        .updateUser({
+          password: cleanPassword
+        });
+
+    if (error) throw error;
+    return true;
+  },
+
   async signOutAdmin() {
     const { error } =
       await window.chestSupabase.auth
@@ -248,7 +343,13 @@ window.ChestDatabase = {
 
       user_id: user.id,
 
-      nickname: "Tester",
+      nickname:
+        String(
+          user.user_metadata?.nickname ||
+          "Player"
+        )
+          .trim()
+          .slice(0, 30) || "Player",
 
       alliance_name: null,
 

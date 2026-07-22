@@ -773,6 +773,78 @@
     >
       Sign in
     </button>
+    <button
+      id="showMemberSignUpButton"
+      class="button secondary-button full-width-button"
+      type="button"
+    >
+      Create account
+    </button>
+    <button
+      id="forgotPasswordButton"
+      class="button secondary-button full-width-button"
+      type="button"
+    >
+      Forgot password?
+    </button>
+  </div>
+
+  <div id="memberSignUpPanel" class="profile-form hidden">
+    <p class="eyebrow">CREATE PLAYER ACCOUNT</p>
+    <input
+      id="memberNicknameInput"
+      type="text"
+      maxlength="30"
+      autocomplete="nickname"
+      placeholder="Nickname"
+    >
+    <input
+      id="memberSignUpEmailInput"
+      type="email"
+      autocomplete="email"
+      placeholder="Email"
+    >
+    <input
+      id="memberSignUpPasswordInput"
+      type="password"
+      minlength="8"
+      autocomplete="new-password"
+      placeholder="Password (at least 8 characters)"
+    >
+    <button
+      id="createMemberAccountButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Create player account
+    </button>
+    <button
+      id="backToMemberSignInButton"
+      class="button secondary-button full-width-button"
+      type="button"
+    >
+      Back to sign in
+    </button>
+    <p id="memberSignUpStatus" class="muted-text"></p>
+  </div>
+
+  <div id="passwordRecoveryPanel" class="profile-form hidden">
+    <p class="eyebrow">CHOOSE A NEW PASSWORD</p>
+    <input
+      id="memberNewPasswordInput"
+      type="password"
+      minlength="8"
+      autocomplete="new-password"
+      placeholder="New password (at least 8 characters)"
+    >
+    <button
+      id="saveMemberPasswordButton"
+      class="button primary-button full-width-button"
+      type="button"
+    >
+      Save new password
+    </button>
+    <p id="passwordRecoveryStatus" class="muted-text"></p>
   </div>
 
   <div id="playerSignedInPanel" class="hidden">
@@ -1276,14 +1348,14 @@
   =========================================== -->
 
 <script src="supabase.js"></script>
-<script src="database.js?v=20260722-4"></script>
+<script src="database.js?v=20260722-5"></script>
 
 <script src="predictor-cloud.js?v=20260722-4"></script>
 <script src="event-parser.js"></script>
 <script src="har-event-adapter.js"></script>
 <script src="js/har-gacha-parser.js"></script>
 <script src="event-import.js"></script>
-<script src="admin-event-publisher.js?v=20260722-4"></script>
+<script src="admin-event-publisher.js?v=20260722-5"></script>
 <script src="live-predictor-engine.js?v=20260722-4"></script>
 <script src="live-predictor-ui.js?v=20260722-4"></script>
 

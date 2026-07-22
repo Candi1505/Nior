@@ -18,6 +18,8 @@
     profile: null,
     isAdmin: false
   };
+  let showingSignUp = false;
+  let passwordRecoveryActive = false;
 
   function setStatus(message, failed = false) {
     const status = get("adminAccessStatus");
@@ -38,6 +40,10 @@
       get("adminSignedInPanel");
     const playerPanel =
       get("playerSignedInPanel");
+    const signUpPanel =
+      get("memberSignUpPanel");
+    const recoveryPanel =
+      get("passwordRecoveryPanel");
     const controls =
       get("adminHarControls");
     const importButton =
@@ -45,7 +51,19 @@
 
     loginPanel?.classList.toggle(
       "hidden",
-      Boolean(access.user)
+      Boolean(access.user) ||
+      showingSignUp ||
+      passwordRecoveryActive
+    );
+    signUpPanel?.classList.toggle(
+      "hidden",
+      Boolean(access.user) ||
+      !showingSignUp ||
+      passwordRecoveryActive
+    );
+    recoveryPanel?.classList.toggle(
+      "hidden",
+      !passwordRecoveryActive
     );
     signedInPanel?.classList.toggle(
       "hidden",
@@ -57,7 +75,9 @@
     );
     playerPanel?.classList.toggle(
       "hidden",
-      !access.user || access.isAdmin
+      !access.user ||
+      access.isAdmin ||
+      passwordRecoveryActive
     );
 
     const eyebrow = get("eventAccessEyebrow");
@@ -66,7 +86,23 @@
       get("eventAccessDescription");
     const badge = get("eventImportBadge");
 
-    if (access.isAdmin) {
+    if (passwordRecoveryActive) {
+      if (eyebrow) eyebrow.textContent =
+        "ACCOUNT SECURITY";
+      if (title) title.textContent =
+        "Reset Password";
+      if (description) description.textContent =
+        "Choose a new password for your Chest Companion account.";
+      if (badge) badge.textContent = "Secure";
+    } else if (showingSignUp) {
+      if (eyebrow) eyebrow.textContent =
+        "PLAYER ACCOUNT";
+      if (title) title.textContent =
+        "Create Account";
+      if (description) description.textContent =
+        "Create your personal account, then confirm your email to access live predictions.";
+      if (badge) badge.textContent = "Secure";
+    } else if (access.isAdmin) {
       if (eyebrow) eyebrow.textContent =
         "LIVE EVENT DATA";
       if (title) title.textContent =
@@ -196,8 +232,116 @@
       profile: null,
       isAdmin: false
     };
+    showingSignUp = false;
+    passwordRecoveryActive = false;
 
     renderAccess();
+  }
+
+  function showSignUp() {
+    showingSignUp = true;
+    renderAccess();
+  }
+
+  function showSignIn() {
+    showingSignUp = false;
+    renderAccess();
+  }
+
+  async function createMemberAccount() {
+    const nickname =
+      get("memberNicknameInput")?.value;
+    const email =
+      get("memberSignUpEmailInput")?.value;
+    const password =
+      get("memberSignUpPasswordInput")?.value;
+    const button =
+      get("createMemberAccountButton");
+    const status =
+      get("memberSignUpStatus");
+
+    button.disabled = true;
+    button.textContent = "Creating account...";
+
+    try {
+      status.classList.remove("error-text");
+      const result =
+        await window.ChestDatabase
+          .signUpMember(
+            email,
+            password,
+            nickname
+          );
+
+      if (get("memberSignUpPasswordInput")) {
+        get("memberSignUpPasswordInput").value = "";
+      }
+
+      if (result.confirmationRequired) {
+        status.textContent =
+          "Account created. Check your email and tap the confirmation link, then return here to sign in.";
+      } else {
+        status.textContent =
+          "Account created successfully.";
+        showingSignUp = false;
+        await refreshAccess();
+      }
+    } catch (error) {
+      status.textContent =
+        error?.message ||
+        "The account could not be created.";
+      status.classList.add("error-text");
+    } finally {
+      button.disabled = false;
+      button.textContent =
+        "Create player account";
+    }
+  }
+
+  async function sendPasswordReset() {
+    const email =
+      get("adminEmailInput")?.value;
+
+    try {
+      status.classList.remove("error-text");
+      await window.ChestDatabase
+        .sendPasswordReset(email);
+      window.alert(
+        "Check your email for the secure password-reset link."
+      );
+    } catch (error) {
+      window.alert(
+        error?.message ||
+        "The password-reset email could not be sent."
+      );
+    }
+  }
+
+  async function saveNewPassword() {
+    const password =
+      get("memberNewPasswordInput")?.value;
+    const button =
+      get("saveMemberPasswordButton");
+    const status =
+      get("passwordRecoveryStatus");
+
+    button.disabled = true;
+
+    try {
+      await window.ChestDatabase
+        .updateMemberPassword(password);
+      status.textContent =
+        "Your password has been updated successfully.";
+      passwordRecoveryActive = false;
+      await refreshAccess();
+    } catch (error) {
+      status.textContent =
+        error?.message ||
+        "Your password could not be updated.";
+      status.classList.add("error-text");
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function publishImportedEvent(event) {
@@ -308,6 +452,30 @@
         signOut
       );
 
+    get("showMemberSignUpButton")
+      ?.addEventListener("click", showSignUp);
+
+    get("backToMemberSignInButton")
+      ?.addEventListener("click", showSignIn);
+
+    get("createMemberAccountButton")
+      ?.addEventListener(
+        "click",
+        createMemberAccount
+      );
+
+    get("forgotPasswordButton")
+      ?.addEventListener(
+        "click",
+        sendPasswordReset
+      );
+
+    get("saveMemberPasswordButton")
+      ?.addEventListener(
+        "click",
+        saveNewPassword
+      );
+
     get("openPlayerPredictorButton")
       ?.addEventListener(
         "click",
@@ -327,7 +495,14 @@
 
     window.chestSupabase?.auth
       ?.onAuthStateChange?.(
-        () => refreshAccess()
+        event => {
+          if (event === "PASSWORD_RECOVERY") {
+            passwordRecoveryActive = true;
+            showingSignUp = false;
+          }
+
+          refreshAccess();
+        }
       );
 
     refreshAccess();

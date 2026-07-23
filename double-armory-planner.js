@@ -33,6 +33,7 @@
     energyPack: "Energy Packs",
     dragonHealPotion: "Dragon Heal Potions",
     mysticFragment: "Mystic Fragments",
+    chest0: "Freedom Chests",
     chest2: "Gold Chests",
     chest33: "Bronze Chests"
   };

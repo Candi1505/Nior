@@ -13,6 +13,7 @@
   const BUTTON_ID = "noirDoubleArmoryButton";
   const CHEST_ICONS = { gold: "🥇", platinum: "💎", draconic: "🐉", freedom: "🦅" };
   let selectedChestType = "platinum";
+  let restoreLivePredictorOnClose = false;
 
   const REWARD_NAMES = {
     breedingToken: "Breeding Tokens",
@@ -31,8 +32,33 @@
     innerFireConsumable: "Inner Fire",
     energyPack: "Energy Packs",
     dragonHealPotion: "Dragon Heal Potions",
-    mysticFragment: "Mystic Fragments"
+    mysticFragment: "Mystic Fragments",
+    chest2: "Gold Chests",
+    chest33: "Bronze Chests"
   };
+
+  function livePredictorOverlay() {
+    return document.getElementById("ccLivePredictorOverlay");
+  }
+
+  function hideLivePredictor() {
+    const overlay = livePredictorOverlay();
+    if (overlay?.classList.contains("lp-open")) {
+      restoreLivePredictorOnClose = true;
+      overlay.classList.remove("lp-open");
+    }
+  }
+
+  function closePlanner() {
+    document.getElementById(OVERLAY_ID)?.remove();
+    if (restoreLivePredictorOnClose) {
+      livePredictorOverlay()?.classList.add("lp-open");
+      restoreLivePredictorOnClose = false;
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+  }
 
   function clone(value) {
     return value === undefined ? undefined : structuredClone(value);
@@ -195,7 +221,7 @@
     const style = document.createElement("style");
     style.id = "noirDoubleArmoryStyles";
     style.textContent = `
-      #${OVERLAY_ID}{position:fixed;inset:0;z-index:100000;background:#050505;color:#ddd;overflow:auto;font-family:inherit;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+      #${OVERLAY_ID}{position:fixed;inset:0;z-index:2147483647;background:#050505;color:#ddd;overflow:auto;font-family:inherit;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
       .da-shell{width:min(1100px,100%);margin:auto;padding:18px}
       .da-top{position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;gap:14px;align-items:center;padding:18px;background:rgba(5,5,5,.96);border-bottom:1px solid #3c321c}
       .da-eyebrow{margin:0;color:#c7a956;font-size:12px;font-weight:900;letter-spacing:.22em}
@@ -245,6 +271,7 @@
         return;
       }
       if (!available.includes(selectedChestType)) selectedChestType = available[0];
+      hideLivePredictor();
       const assault = buildSequence(data.sides.assault, selectedChestType);
       const breeding = buildSequence(data.sides.breeding, selectedChestType);
       const chest = data.sides.assault?.chests?.[selectedChestType];
@@ -271,7 +298,7 @@
           `).join("")}
         </div>
       </div>`;
-      overlay.querySelector(".da-close")?.addEventListener("click", () => overlay.remove());
+      overlay.querySelector(".da-close")?.addEventListener("click", closePlanner);
       overlay.querySelectorAll(".da-tab").forEach(button => {
         button.addEventListener("click", () => {
           selectedChestType = button.dataset.chest;

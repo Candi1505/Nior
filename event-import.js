@@ -63,6 +63,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function showPublishedEvent(eventData) {
+    if (!eventData?.chests) return false;
+
+    const eventName =
+      eventData.event ||
+      eventData.eventName ||
+      "Current event";
+    const readyCount =
+      Number(eventData.readyChestCount) ||
+      Object.values(eventData.chests)
+        .filter(chest => chest?.ready || chest?.found)
+        .length;
+
+    setBadge("Published", "ready");
+    statusText.textContent =
+      `${eventName} is published with ${readyCount} chest deck(s) ready. Choose a new file only when replacing the live event.`;
+    return true;
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -839,6 +858,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   restoreSavedLiveEvent();
 
+  window.addEventListener(
+    "noir:event-imported",
+    event => {
+      if (event?.detail?.cloud || event?.detail?.restored) {
+        showPublishedEvent(
+          event.detail.eventData ||
+          event.detail.parsed
+        );
+      }
+    }
+  );
+
+  setTimeout(() => {
+    showPublishedEvent(
+      window.ChestCompanionPublishedEvent?.data ||
+      window.currentEventData
+    );
+  }, 0);
+
   importButton.addEventListener(
     "click",
     importEventFile
@@ -851,12 +889,17 @@ document.addEventListener("DOMContentLoaded", () => {
         fileInput.files?.[0];
 
       if (!file) {
-        setBadge(
-          "Not imported"
-        );
+        if (!showPublishedEvent(
+          window.ChestCompanionPublishedEvent?.data ||
+          window.currentEventData
+        )) {
+          setBadge(
+            "Not imported"
+          );
 
-        statusText.textContent =
-          "No live event data imported.";
+          statusText.textContent =
+            "No live event data has been published yet.";
+        }
 
         return;
       }

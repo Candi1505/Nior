@@ -2330,9 +2330,14 @@ function getNormalisedDeck(
       );
 
     const deck =
-      getNormalisedDeck(
-        normalised
-      );
+      [
+        ...getNormalisedDeck(
+          normalised
+        ),
+        ...getNormalisedBonusDeck(
+          normalised
+        )
+      ];
 
     const rewards =
       new Map();

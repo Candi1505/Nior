@@ -46,6 +46,20 @@
   freedom: "freedom_chest"
 };
 
+  const BONUS_DECK_KEYS = {
+    gold: "gold_chest_bonus",
+    platinum: "platinum_chest_bonus",
+    draconic: "dragfrag_chest_tier3_bonus",
+    freedom: "freedom_chest_bonus"
+  };
+
+  const BONUS_FREQUENCIES = {
+    gold: 30,
+    platinum: 30,
+    draconic: 30,
+    freedom: 15
+  };
+
   let state =
     loadPlayerState();
 
@@ -1098,6 +1112,17 @@ function getChestDeckKey(
   ];
 }
 
+function getBonusDeckKey(
+  chestType =
+    state.activeChest
+) {
+  return BONUS_DECK_KEYS[
+    normaliseChestType(
+      chestType
+    )
+  ];
+}
+
 function getNamedDeck(
   deckKey
 ) {
@@ -2071,7 +2096,7 @@ function resolveDeckReward(
     };
   }
 
-  function getNormalisedDeck(
+function getNormalisedDeck(
   chestType =
     state.activeChest
 ) {
@@ -2201,6 +2226,100 @@ function resolveDeckReward(
     : resolvedDeck;
 }
 
+  function getNormalisedBonusDeck(
+    chestType =
+      state.activeChest
+  ) {
+    const normalisedChest =
+      normaliseChestType(
+        chestType
+      );
+
+    const bonusDeckKey =
+      getBonusDeckKey(
+        normalisedChest
+      );
+
+    const rawDeck =
+      getNamedDeck(
+        bonusDeckKey
+      );
+
+    if (!rawDeck.length) {
+      return [];
+    }
+
+    const cursors =
+      createDeckCursors();
+
+    const startIndex =
+      getNextNamedDeckIndex(
+        bonusDeckKey
+      );
+
+    return rawDeck.map(
+      (rawValue, offset) => {
+        const bonusIndex =
+          (
+            startIndex +
+            offset
+          ) %
+          rawDeck.length;
+
+        const resolved =
+          resolveDeckReward(
+            bonusDeckKey,
+            rawDeck[bonusIndex],
+            cursors
+          );
+
+        const reward =
+          normaliseDeckEntry(
+            {
+              ...resolved,
+
+              matchValue: {
+                name:
+                  resolved.name,
+                code:
+                  resolved.code,
+                amount:
+                  resolved.amount
+              },
+
+              deckValue:
+                rawDeck[bonusIndex],
+
+              mainDeckKey:
+                bonusDeckKey,
+
+              mainDeckIndex:
+                bonusIndex,
+
+              resolutionPath:
+                resolved.path
+            },
+            offset,
+            normalisedChest
+          );
+
+        reward.index =
+          bonusIndex;
+
+        reward.position =
+          bonusIndex + 1;
+
+        reward.isBonus =
+          true;
+
+        reward.bonus =
+          true;
+
+        return reward;
+      }
+    );
+  }
+
   function getRewards(
     chestType =
       state.activeChest
@@ -2211,9 +2330,14 @@ function resolveDeckReward(
       );
 
     const deck =
-      getNormalisedDeck(
-        normalised
-      );
+      [
+        ...getNormalisedDeck(
+          normalised
+        ),
+        ...getNormalisedBonusDeck(
+          normalised
+        )
+      ];
 
     const rewards =
       new Map();
@@ -2502,10 +2626,37 @@ function valuesMatch(
     );
   }
 
+  function getRegularObservations(
+    chestType =
+      state.activeChest
+  ) {
+    return getObservations(
+      chestType
+    ).filter(
+      observation =>
+        !observation?.isBonus &&
+        !observation?.bonus
+    );
+  }
+
+  function getBonusObservations(
+    chestType =
+      state.activeChest
+  ) {
+    return getObservations(
+      chestType
+    ).filter(
+      observation =>
+        observation?.isBonus === true ||
+        observation?.bonus === true
+    );
+  }
+
   function createObservation(
     reward,
     chestType,
-    quantity = 1
+    quantity = 1,
+    isBonus = false
   ) {
     const normalisedChest =
       normaliseChestType(
@@ -2549,6 +2700,12 @@ function valuesMatch(
 
       chestsOpened:
         quantity,
+
+      isBonus:
+        Boolean(isBonus),
+
+      bonus:
+        Boolean(isBonus),
 
       value:
         cloneValue(
@@ -2623,6 +2780,12 @@ function valuesMatch(
       resolvedPayload.value ??
       resolvedPayload;
 
+    const isBonus =
+      Boolean(
+        resolvedPayload.isBonus ||
+        resolvedPayload.bonus
+      );
+
     const quantity =
       Math.max(
         1,
@@ -2647,7 +2810,8 @@ function valuesMatch(
         createObservation(
           reward,
           normalisedChest,
-          1
+          1,
+          isBonus
         );
 
       state.observations[
@@ -2879,7 +3043,7 @@ function valuesMatch(
       );
 
     const observations =
-      getObservations(
+      getRegularObservations(
         chestType
       );
 
@@ -2997,7 +3161,7 @@ function valuesMatch(
       );
 
     const observations =
-      getObservations(
+      getRegularObservations(
         normalised
       );
 
@@ -3191,33 +3355,70 @@ function valuesMatch(
 
     const upcoming = [];
 
-    const bonusEvery = {
-      gold: 30,
-      platinum: 30,
-      draconic: 30,
-      freedom: 15
-    }[normalised] || null;
+    const bonusEvery =
+      BONUS_FREQUENCIES[
+        normalised
+      ] || null;
 
-    let regularSinceBonus = bonusEvery
-      ? getObservations(normalised)
-          .filter(
-            observation =>
-              !observation?.isBonus &&
-              !observation?.bonus
+    const chestData =
+      getChestData(
+        normalised
+      );
+
+    const explicitProgress =
+      toFiniteNumber(
+        firstDefined([
+          chestData?.openedSinceBonus,
+          chestData?.regularSinceBonus,
+          chestData?.bonusProgress
+        ]),
+        null
+      );
+
+    const importedProgress =
+      explicitProgress === null
+        ? (
+            getNamedDeckIndex(
+              getChestDeckKey(
+                normalised
+              )
+            ) + 1
           )
-          .reduce(
-            (total, observation) =>
-              total + Math.max(
-                1,
-                toFiniteNumber(
-                  observation?.chestCount ??
-                  observation?.chestsOpened,
-                  1
-                ) || 1
-              ),
-            0
+        : explicitProgress;
+
+    const regularObservationCount =
+      getRegularObservations(
+        normalised
+      ).reduce(
+        (total, observation) =>
+          total + Math.max(
+            1,
+            toFiniteNumber(
+              observation?.chestCount ??
+              observation?.chestsOpened,
+              1
+            ) || 1
+          ),
+        0
+      );
+
+    let regularSinceBonus =
+      bonusEvery
+        ? (
+            importedProgress +
+            regularObservationCount
           ) % bonusEvery
-      : 0;
+        : 0;
+
+    const bonusDeck =
+      getNormalisedBonusDeck(
+        normalised
+      );
+
+    let bonusOffset =
+      getBonusObservations(
+        normalised
+      ).length;
 
     for (
       let offset = 1;
@@ -3236,7 +3437,7 @@ function valuesMatch(
 
       upcoming.push({
         number:
-          offset,
+          upcoming.length + 1,
 
         index,
 
@@ -3291,20 +3492,69 @@ function valuesMatch(
           const chestLabel =
             getChestLabel(normalised);
 
+          const bonusReward =
+            bonusDeck.length
+              ? bonusDeck[
+                  bonusOffset %
+                  bonusDeck.length
+                ]
+              : null;
+
           upcoming.push({
             number: upcoming.length + 1,
-            index: null,
-            position: null,
-            name: `${chestLabel} Bonus Chest`,
-            label: `${chestLabel} Bonus Chest`,
-            code: `${normalised}_bonus`,
-            amount: null,
+            index:
+              bonusReward?.index ??
+              null,
+            position:
+              bonusReward?.position ??
+              null,
+            name:
+              bonusReward?.name ||
+              `${chestLabel} Bonus Chest`,
+            label:
+              bonusReward?.name ||
+              `${chestLabel} Bonus Chest`,
+            code:
+              bonusReward?.code ||
+              `${normalised}_bonus`,
+            amount:
+              bonusReward?.amount ??
+              null,
+            value:
+              cloneValue(
+                bonusReward?.matchValue
+              ),
+            matchValue:
+              cloneValue(
+                bonusReward?.matchValue
+              ),
+            reward:
+              cloneValue(
+                bonusReward?.raw
+              ),
+            raw:
+              cloneValue(
+                bonusReward?.raw
+              ),
             isBonus: true,
+            bonus: true,
             bonusEvery,
             bonusAfterRegularChest: offset,
-            displayValue: `${chestLabel} Bonus Chest`
+            displayValue:
+              bonusReward
+                ? (
+                    bonusReward.amount ===
+                    null
+                      ? bonusReward.name
+                      : (
+                          `${bonusReward.name} — ` +
+                          `${bonusReward.amount}`
+                        )
+                  )
+                : `${chestLabel} Bonus Chest`
           });
 
+          bonusOffset += 1;
           regularSinceBonus = 0;
         }
       }

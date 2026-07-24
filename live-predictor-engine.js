@@ -2426,7 +2426,23 @@ function getNormalisedDeck(
     }
 
     const cursors =
-      createDeckCursors();
+      Object.fromEntries(
+        Object.keys(
+          getEventDeckIndices()
+        ).map(
+          deckKey => [
+            deckKey,
+            Math.max(
+              0,
+              Math.floor(
+                getNamedDeckIndex(
+                  deckKey
+                )
+              )
+            )
+          ]
+        )
+      );
 
     const startIndex =
       Math.max(

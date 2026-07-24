@@ -2429,8 +2429,13 @@ function getNormalisedDeck(
       createDeckCursors();
 
     const startIndex =
-      getNextNamedDeckIndex(
-        bonusDeckKey
+      Math.max(
+        0,
+        Math.floor(
+          getNamedDeckIndex(
+            bonusDeckKey
+          )
+        )
       );
 
     return rawDeck.map(

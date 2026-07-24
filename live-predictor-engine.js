@@ -1116,11 +1116,187 @@ function getBonusDeckKey(
   chestType =
     state.activeChest
 ) {
-  return BONUS_DECK_KEYS[
+  const normalised =
     normaliseChestType(
       chestType
+    );
+
+  const exactKey =
+    BONUS_DECK_KEYS[
+      normalised
+    ];
+
+  const decks =
+    getEventDecks();
+
+  if (
+    Array.isArray(
+      decks?.[exactKey]
     )
-  ];
+  ) {
+    return exactKey;
+  }
+
+  const aliases = {
+    gold: [
+      "gold_bonus_chest",
+      "bonus_gold_chest",
+      "gold_bonus",
+      "chest4"
+    ],
+    platinum: [
+      "platinum_bonus_chest",
+      "bonus_platinum_chest",
+      "platinum_bonus",
+      "chest12"
+    ],
+    draconic: [
+      "dragfrag_bonus_chest_tier3",
+      "bonus_dragfrag_chest_tier3",
+      "draconic_bonus_chest",
+      "draconic_bonus",
+      "chest28"
+    ],
+    freedom: [
+      "freedom_bonus_chest",
+      "bonus_freedom_chest",
+      "freedom_bonus",
+      "chest34"
+    ]
+  }[normalised] || [];
+
+  const aliasMatch =
+    aliases.find(
+      key =>
+        Array.isArray(
+          decks?.[key]
+        )
+    );
+
+  if (aliasMatch) {
+    return aliasMatch;
+  }
+
+  const chestTerms = {
+    gold: [
+      "gold",
+      "chest4"
+    ],
+    platinum: [
+      "platinum",
+      "plat",
+      "chest12"
+    ],
+    draconic: [
+      "draconic",
+      "dragfrag",
+      "drag_frag",
+      "chest28"
+    ],
+    freedom: [
+      "freedom",
+      "chest34"
+    ]
+  }[normalised] || [];
+
+  const spinTypes =
+    Array.isArray(
+      getEventData()?.spinTypes
+    )
+      ? getEventData().spinTypes
+      : [];
+
+  const matchingSpinText =
+    spinTypes
+      .filter(spinType => {
+        const text =
+          JSON.stringify(
+            spinType
+          ).toLowerCase();
+
+        return (
+          text.includes("bonus") &&
+          chestTerms.some(
+            term =>
+              text.includes(term)
+          )
+        );
+      })
+      .map(
+        spinType =>
+          JSON.stringify(
+            spinType
+          ).toLowerCase()
+      )
+      .join(" ");
+
+  const rankedKeys =
+    Object.keys(
+      decks || {}
+    )
+      .filter(
+        key =>
+          Array.isArray(
+            decks[key]
+          ) &&
+          key !==
+            getChestDeckKey(
+              normalised
+            )
+      )
+      .map(key => {
+        const lowerKey =
+          key.toLowerCase();
+
+        let score = 0;
+
+        if (
+          lowerKey.includes(
+            "bonus"
+          )
+        ) {
+          score += 100;
+        }
+
+        if (
+          chestTerms.some(
+            term =>
+              lowerKey.includes(
+                term
+              )
+          )
+        ) {
+          score += 50;
+        }
+
+        if (
+          matchingSpinText &&
+          matchingSpinText.includes(
+            lowerKey
+          )
+        ) {
+          score += 1000;
+        }
+
+        return {
+          key,
+          score
+        };
+      })
+      .filter(
+        candidate =>
+          candidate.score >= 100
+      )
+      .sort(
+        (left, right) =>
+          right.score -
+          left.score
+      );
+
+  return (
+    rankedKeys[0]?.key ||
+    exactKey
+  );
 }
 
 function getNamedDeck(

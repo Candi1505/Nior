@@ -161,7 +161,11 @@
     chest2: "Gold Chests",
     chest11: "Platinum Chests",
     chest27: "Draconic Chests",
-    chest33: "Freedom Chests"
+    chest33: "Freedom Chests",
+    E25Q1FestiveSorcererDragonEvolutionFragment: "Volcaryx Shards",
+    E25Q2FestiveWarriorDragonEvolutionFragment: "Riphorn Shards",
+    E25Q3FestiveWarriorDragonEvolutionFragment: "Eldrath Shards",
+    E25Q4FestiveHunterDragonEvolutionFragment: "Drekgor Shards"
   };
 
   function humaniseRewardIdentifier(value) {
@@ -1726,6 +1730,19 @@ function resolveDeckReward(
       getRewardIdentifier(
         reward
       );
+
+    // Prefer a verified display name for a known internal reward identifier.
+    // Imported HAR metadata may also contain a mechanically humanised `name`
+    // (for example "E25 Q1 Festive Sorcerer Dragon Evolution Fragment");
+    // that generated label must not override the real in-game shard name.
+    if (
+      identifier &&
+      REWARD_DISPLAY_NAMES[identifier]
+    ) {
+      return REWARD_DISPLAY_NAMES[
+        identifier
+      ];
+    }
 
     const name =
       firstDefined([

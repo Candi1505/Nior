@@ -1134,6 +1134,37 @@ function getNamedDeckIndex(
     0
   ) || 0;
 }
+
+function getNextNamedDeckIndex(
+  deckKey
+) {
+  const deck =
+    getNamedDeck(
+      deckKey
+    );
+
+  const currentIndex =
+    Math.floor(
+      getNamedDeckIndex(
+        deckKey
+      )
+    );
+
+  if (!deck.length) {
+    return Math.max(
+      0,
+      currentIndex + 1
+    );
+  }
+
+  return (
+    (
+      currentIndex + 1
+    ) %
+      deck.length +
+    deck.length
+  ) % deck.length;
+}
   
    function getRawDeck(
   chestType =
@@ -1194,16 +1225,10 @@ function createDeckCursors() {
   Object.entries(
     getEventDeckIndices()
   ).forEach(
-    ([deckKey, index]) => {
+    ([deckKey]) => {
       cursors[deckKey] =
-        Math.max(
-          0,
-          Math.floor(
-            toFiniteNumber(
-              index,
-              0
-            ) || 0
-          )
+        getNextNamedDeckIndex(
+          deckKey
         );
     }
   );
@@ -1229,7 +1254,7 @@ function takeDeckValue(
       cursors[
         deckKey
       ],
-      getNamedDeckIndex(
+      getNextNamedDeckIndex(
         deckKey
       )
     ) || 0;
@@ -2082,7 +2107,7 @@ function resolveDeckReward(
     createDeckCursors();
 
   const mainStartIndex =
-    getNamedDeckIndex(
+    getNextNamedDeckIndex(
       mainDeckKey
     );
 
@@ -2164,7 +2189,16 @@ function resolveDeckReward(
     );
   }
 
-  return resolvedDeck;
+  // The imported cursor identifies the last resolved opening. Resolve the
+  // rarity decks from that cursor first, then expose the following reward as
+  // position one without disturbing the rarity-deck consumption order.
+  return resolvedDeck.length > 1
+    ? resolvedDeck
+        .slice(1)
+        .concat(
+          resolvedDeck[0]
+        )
+    : resolvedDeck;
 }
 
   function getRewards(
